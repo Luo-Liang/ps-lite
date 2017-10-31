@@ -6,6 +6,7 @@
 #include <stdio.h>      /* printf */
 #include <math.h>       /* ceil */
 #include <vector>
+#include <unistd.h>
 
 static int GetCurrentThreadNumaNode()
 {

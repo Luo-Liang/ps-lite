@@ -7,7 +7,7 @@
 #include <atomic>
 #include <sstream> 
 #include <math.h>
-#include "lfq.h"
+//#include "lfq.h"
 #include "dmlc/DIME.h"
 #include "PHUB.h"
 #include "Optimizers.h"
