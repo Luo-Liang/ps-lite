@@ -25,6 +25,7 @@ Customer::~Customer() {
 int Customer::NewRequest(int recver) {
   std::lock_guard<std::mutex> lk(tracker_mu_);
   int num = Postoffice::Get()->GetNodeIDs(recver).size();
+  //printf("recver = %d, num = %d, tracker.len = $d\n", recver, num, 
   tracker_.push_back(std::make_pair(num, 0));
   return tracker_.size() - 1;
 }
@@ -55,10 +56,17 @@ void Customer::Receiving() {
       break;
     }
     recv_handle_(recv);
-    if (!recv.meta.request) {
-      std::lock_guard<std::mutex> lk(tracker_mu_);
-      tracker_[recv.meta.timestamp].second++;
-      tracker_cond_.notify_all();
+
+    if (ps::Postoffice::Get()->van()->HasFeature(ps::Van::MetadataElision) == false || 
+	recv.meta.head != 0 || //note head 0 is
+	recv.meta.control.empty() == false ||
+	recv.meta.simple_app != false)
+    { 
+	if (!recv.meta.request) {
+	    std::lock_guard<std::mutex> lk(tracker_mu_);
+	    tracker_[recv.meta.timestamp].second++;
+	    tracker_cond_.notify_all();
+	}
     }
   }
 }
