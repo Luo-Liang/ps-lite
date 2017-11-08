@@ -45,7 +45,10 @@ namespace ps {
 #endif
 	
 	Van* Van::Create(const std::string& type) {
-		LOG(WARNING) << type << " selected.";
+	    char hostname[1024];
+	    gethostname(hostname, 1024);
+
+	    LOG(WARNING) << type << " selected. MID: " << hostname << " PID: " <<getpid() ;
 
 #ifdef PHUB_PERF_DIAG
 		PerfMonLite::Init();
