@@ -18,7 +18,7 @@
 #include "dmlc/DIME.h"
 #include <fstream>
 #include "PHubAllocator.h"
-//#include "GlooVan.h"
+#include "GlooVan.h"
 
 //TODO:: move these things away
 #ifdef PHUB_PERF_DIAG
@@ -70,10 +70,10 @@ namespace ps {
 			auto tCounti = atoi(tCounts);
 			return new PSHUBVan(tCounti);
 		}
-//		else if (type == "gloo")
-//		{
-//		    return new GlooVan();
-//		}
+		else if (type == "gloo")
+		{
+		    return new GlooVan();
+		}
 		else {
 			LOG(FATAL) << "unsupported van type: " << type;
 			return nullptr;
