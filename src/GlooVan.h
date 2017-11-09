@@ -95,6 +95,7 @@ namespace ps {
 			}
 			auto reducerString = std::string(reducerStr);
 			//GlooBuffersLayered.resize(keySize.size());
+			GlooBuffersLayeredGradientPtr.resize(keySize.size());
 			for (size_t i = 0; i < keySize.size(); i++)
 			{
 				totalBytes += keySize.at(i);
