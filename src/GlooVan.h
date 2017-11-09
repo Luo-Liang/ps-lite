@@ -40,9 +40,10 @@ namespace ps {
 		GlooVan()
 		{
 			FeatureSet = Van::PullRequestElision |
-				Van::MetadataElision | 
+				Van::MetadataElision |
 				Van::WorkerSidePushPullZeroCopy |
 				Van::SupportsKeyChunking |
+				Van::SynchronousPush |
 				Van::PullRequestElision;
 			//also enable optimizer but ignore aggregator.
 			auto suppressOpt = Environment::Get()->find("PHUB_SUPPRESS_OPTIMIZER");
@@ -169,8 +170,26 @@ namespace ps {
 				//This is wrong in accuracy but correct in performance.
 				OPT->Update(0, GlooBuffersLayeredGradientPtr.at(key)[0], GlooBuffersLayeredGradientPtr.at(key)[0], keySize.at(key) / sizeof(float));
 			}
-
+			//immediately call RecvMsg, instead of waiting for it to be scheduled.
+			Message ack;
+			Message* pmsg = &ack;
+			pmsg->meta.body = "";
+			pmsg->meta.control.cmd = Control::EMPTY;
+			pmsg->meta.customer_id = 0;
+			pmsg->meta.head = 0;
+			pmsg->meta.push = 1;
+			pmsg->meta.sender = 8;
+			pmsg->meta.recver = my_node_.id;
+			pmsg->meta.request = 0;
+			pmsg->meta.simple_app = 0;
+			pmsg->meta.timestamp = msg.meta.timestamp;
+			pmsg->data.clear();
+			//SArray<float> valArray((float*)vKeyAddress.at(result), keySize.at(result) / sizeof(float));
+			//pmsg->AddData(KeySArrays.at(result));
+			//pmsg->AddData(valArray);
+			//pmsg->AddData(LenSArrays.at(result));
 			//FastRecvQ.Push(key);
+			RecvMsg(pmsg);
 			return 1;//don't care.
 		}
 		virtual int RecvMsg(Message* msg) override
