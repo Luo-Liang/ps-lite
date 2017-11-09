@@ -116,6 +116,7 @@ namespace ps {
 
         //Sets the key size and key address (for workers).
         //Server: ignore key address.
+		//This is virtual key space.
         void SetKeySize(int key, int bytes, uint64_t kAddr = 0, uint64_t kRecvAddr = 0)
         {
             //printf("[%d]Key = [%d], Size = [%d]\n", my_node_.id, key, bytes);
