@@ -42,8 +42,9 @@ namespace ps {
             VerbsPostSendNoLocking = 64,
             SupportsBitwidthSIM = 128,
             PullRequestElision = 256,
-            MetadataElision = 512
-        };
+            MetadataElision = 512,
+			SynchronousPush = 1024
+		};
         /**
          * \brief create Van
          * \param type zmq, socket, ...
