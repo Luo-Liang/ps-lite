@@ -40,9 +40,26 @@ template<typename T> class ThreadsafeQueue {
     queue_.pop();
   }
 
+
+  bool TryPop(T* value)
+  {
+      std::unique_lock<std::mutex> lk(mu_);
+      if (queue_.empty())
+      {
+          return false;
+      }
+      else
+      {
+          *value = std::move(queue_.front());
+          queue_.pop();
+	  return true;
+      }
+  }
+
+  std::queue<T> queue_;
+
  private:
   mutable std::mutex mu_;
-  std::queue<T> queue_;
   std::condition_variable cond_;
 };
 

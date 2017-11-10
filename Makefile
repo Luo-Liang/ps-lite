@@ -17,8 +17,8 @@ ifndef PROTOC
 PROTOC = ${DEPS_PATH}/bin/protoc
 endif
 
-INCPATH = -I./src -I./include -I$(DEPS_PATH)/include
-CFLAGS = -std=c++11 -msse2 -fPIC -O3 -ggdb -Wall -finline-functions $(INCPATH) $(ADD_CFLAGS) -lnuma -libverbs -libgloo
+INCPATH = -I./src -I./include -I$(DEPS_PATH)/include -I/usr/local/include/hiredis
+CFLAGS = -std=c++11 -msse2 -fPIC -O3 -ggdb -Wall -finline-functions $(INCPATH) $(ADD_CFLAGS) -lnuma -libverbs
 
 all: ps test
 
@@ -33,7 +33,7 @@ lint:
 
 ps: build/libps.a
 
-OBJS = $(addprefix build/, customer.o postoffice.o van.o meta.pb.o)
+OBJS = /usr/local/lib/libgloo.a $(addprefix build/, customer.o postoffice.o van.o meta.pb.o)
 build/libps.a: $(OBJS)
 	ar crv $@ $(filter %.o, $?)
 

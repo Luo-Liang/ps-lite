@@ -310,6 +310,7 @@ namespace ps {
         void PHUBRunCallbackWithDeterministicKey(int key)
         {
             auto cb = PHUBDeterministicCallbacks.at(key);
+	    //..printf("callback for key %d is called\n", key);
             CHECK(cb);
 	    PHUBDeterministicCallbacks.at(key) = nullptr;
             cb();
@@ -698,9 +699,25 @@ namespace ps {
                     Postoffice::Get()->van()->Send(msg);
                     //}
                 }
+		/*if(Postoffice::Get()->van()->HasFeature(ps::Van::SynchronousPush) == true && Postoffice::Get()->van()->FullyInitialized())
+		{
+		    //pushes are all done.
+		    //I just need to invoke cb.
+		    //do i use deterministic timestamp?
+		    if(Postoffice::Get()->van()->HasFeature(ps::Van::MetadataElision) == true)
+		    {
+			PHUBRunCallbackWithDeterministicKey(timestamp);
+			PHUBDeterministicChunkCounters.at(timestamp) = 0;
+		    }
+		    else
+		    {
+			RunCallback(timestamp);
+		    }
+		    }*/
             }
             else
             {
+		CHECK(Postoffice::Get()->van()->HasFeature(ps::Van::SynchronousPush)==false);
                 //no key branch? what is this for??
                 //mirror what the original code does.
                 Message msg;

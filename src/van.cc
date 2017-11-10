@@ -273,7 +273,6 @@ namespace ps {
 			//print_stacktrace();
 		}
 
-
 		/*if(my_node_.role == 2)
 		  {
 		  printf("scheduler returning from send\n");
