@@ -65,20 +65,23 @@ namespace ps {
 	    if(my_node().role != Node::WORKER) return;
             //create context.
 	    CHECK(keySize.size() > 0);
-            gloo::transport::ibverbs::attr verbsAttr;
-            verbsAttr.name = "mlx4_0";
-	    verbsAttr.port = 1;
-	    verbsAttr.index = 0;
-            auto dev = CreateDevice(verbsAttr);
-            if (my_node_.role == Node::SERVER)
+	    if (my_node_.role == Node::SERVER)
             {
                 //nothing to do with servers.
                 return;
             }
-			
-           
 
-
+            gloo::transport::ibverbs::attr verbsAttr;
+	    auto ib = Environment::Get()->find("PHUB_PREFERRED_INTERFACE");
+            if(ib == NULL)
+            {
+                ib = "mlx4_0";
+            }
+	    auto ibstr = std::string(ib);
+            verbsAttr.name = ibstr;
+	    verbsAttr.port = 1;
+	    verbsAttr.index = 0;
+            auto dev = CreateDevice(verbsAttr);
 
             //initialize weight buffer.
             //WeightBuffers.resize(keySize.size());
