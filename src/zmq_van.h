@@ -18,20 +18,18 @@
 #endif
 
 
-namespace ps {
-    /**
-     * \brief be smart on freeing recved data
-     */
+namespace ps 
+{
+/*
+* brief be smart on freeing recved data
+*/
     inline void FreeData(void *data, void *hint) {
-        if (hint == NULL) {
-            delete[] static_cast<char*>(data);
-        }
-        else {
-            delete static_cast<SArray<char>*>(hint);
-        }
-    }
-
-    /**
+	if (hint == NULL) {
+	    delete [] static_cast<char*>(data);
+	} else {
+	    delete static_cast<SArray<char>*>(hint);
+	}
+    }    /**
      * \brief ZMQ based implementation
      */
     class ZMQVan : public Van {
@@ -90,7 +88,10 @@ namespace ps {
             CHECK(receiver_ != NULL)
                 << "create receiver socket failed: " << zmq_strerror(errno);
             int local = GetEnv("DMLC_LOCAL", 0);
-            std::string addr = local ? "ipc:///tmp/" : "tcp://*:";
+            //std::string addr = local ? "ipc:///tmp/" : "tcp://*:";
+	    std::string hostname = node.hostname.empty() ? "*" : node.hostname; 
+	    std::string addr = local ? "ipc:///tmp/" : "tcp://" + hostname + ":"; 
+
             int port = node.port;
             unsigned seed = static_cast<unsigned>(time(NULL) + port);
             for (int i = 0; i < max_retry + 1; ++i) {
