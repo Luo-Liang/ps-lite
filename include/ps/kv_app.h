@@ -504,7 +504,7 @@ namespace ps {
         if (n) {
             CHECK_GE(n, 2);
             data.keys = msg.data[0];
-            CHECK(data.keys.size() == 1) << "Received unknown msg = " << msg.DebugString();
+            //CHECK(data.keys.size() == 1) << "Received unknown msg = " << msg.DebugString();
             //{
                 //printf("key size is 1 and additional payload is set to %d\n", data.keys[0]);
             meta.additionalPayload = data.keys[0];
