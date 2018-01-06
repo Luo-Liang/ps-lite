@@ -358,7 +358,6 @@ namespace ps {
         /*For other purposes*/
         uint64_t additionalPayload;
         //flexible payload
-        uint64_t additionalPayload2;
     };
 
     /**
@@ -450,29 +449,24 @@ namespace ps {
                 CHECK(req_data.keys.size() == 1) << " key size is " << req_data.keys.size();//PSHUB requires a single key.
                       //PSHUB tests use a single value for each key.
                 KVPairs<Val> res;
-                auto asVectorPtr = (std::vector<std::pair<int, int>>*)req_meta.additionalPayload2;
 
                 if (req_meta.push)
                 {
+		    CHECK(false);
                     //just store
-                    auto sz = asVectorPtr->size();
-                    CHECK(sz == ps::Postoffice::Get()->num_workers()) << asVectorPtr->size() << " vs " << ps::Postoffice::Get()->num_workers();
+                    //auto sz = asVectorPtr->size();
+                    /*CHECK(sz == ps::Postoffice::Get()->num_workers()) << asVectorPtr->size() << " vs " << ps::Postoffice::Get()->num_workers();
                     store[req_data.keys[0]] += req_data.vals[0];
-                    CHECK(req_meta.additionalPayload2 != NULL);
-                    std::vector<std::pair<int, int>> cpy(*asVectorPtr);
-                    asVectorPtr->clear();
                     for (auto pair : cpy)
                     {
                         ps::KVMeta meta;
                         meta.additionalPayload = req_meta.additionalPayload;
-                        //meta.additionalPayload = key;
-                        meta.additionalPayload2 = 0;
                         meta.cmd = req_meta.cmd;
                         meta.push = req_meta.push;
                         meta.timestamp = pair.second;
                         meta.sender = pair.first;
                         server->Response(meta);
-                    }
+			}*/
                 }
                 else
                 {
@@ -507,10 +501,10 @@ namespace ps {
             //CHECK(data.keys.size() == 1) << "Received unknown msg = " << msg.DebugString();
             //{
                 //printf("key size is 1 and additional payload is set to %d\n", data.keys[0]);
+
             meta.additionalPayload = data.keys[0];
             //}
                 //this is a pointer cpy
-            meta.additionalPayload2 = msg.meta.control.msg_sig;
             data.vals = msg.data[1];
             if (n > 2) {
                 CHECK_EQ(n, 3);
@@ -533,7 +527,9 @@ namespace ps {
         msg.meta.recver = req.sender;
         //TODO:: hack ps-lite to retain key information for Acks
     //This forces us to turn off resender, which is not useful with TCP.
+//#ifdef PHUB_PERF_DIAG
         msg.meta.control.msg_sig = req.additionalPayload;
+//#endif
         if (res.keys.size()) {
             msg.AddData(res.keys);
             msg.AddData(res.vals);
