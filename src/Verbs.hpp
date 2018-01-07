@@ -52,6 +52,18 @@ using namespace std;
 ///
 class Verbs {
 public:
+    //which mode phub is running in?
+    enum PHubMode
+    {
+	NotPhub,
+	Central,
+	Shard,
+	Hierarchical
+    };
+
+    PHubMode CurrentMode;
+
+    
     /// list of Verbs-capable devices
     ibv_device ** devices;
     int num_devices;
@@ -129,6 +141,13 @@ public:
     int myId;
     int CoreCount = 0;
     int SocketCount = 0;
+
+    void InitializeHierarchicalPHub() 
+    {
+	
+    }	
+    
+
     /// Discover local Verbs-capable devices; choose one and prepare it for use.
     void initialize_device(const std::string desired_device_name, const int8_t desired_port) {
         //assign cores arbitrarily to sockets. CHange this when needed.
@@ -1295,6 +1314,47 @@ public:
         Send,
         Receive
     };
+
+    void parsePHubArgs()
+    {
+	auto vanStr = getenv("PSLITE_VAN_TYPE");
+	if(vanStr != NULL && strcmp(vanStr, "pshub") == 0)
+	{
+	    auto modeStr = getenv("PHUB_OPERATING_MODE");
+	    if(modeStr == NULL)
+	    {
+		CurrentMode = ps::Postoffice::Get()->num_servers() > 1 ? PHubMode::Shard : PHUbMode::Central;
+	    }
+	    else
+	    {
+		if(strcmp(modeStr, "hierarchical") == 0)
+		{
+		    CurrentMode = PHubMode::Hierarchical;
+		    //if phub is operating in hierachical mode,
+		    //i need to know my role.
+		}
+		else if(strcmp(modeStr, "shard") == 0)
+		{
+		    CurrentMode = PHubMode::Shard;
+		}
+		else if(strcmp(modeStr, "central") == 0)
+		{
+		    CurrentMode = PHubMode::Central;
+		}
+		else
+		{
+		    CHECK(false)<<"specified mode "<< modeStr << " is not recognized";
+		}
+	    }
+	}
+	else
+	{
+	    CurrentMode = PHubMode::NotPHub;
+	}
+
+    }
+
+
     /// MPIConnection reference for communication during queue pair and memory region setup
     Verbs(int qpNum,
         int coreCount,
@@ -1312,6 +1372,9 @@ public:
         , DirectConnect(directConnect)
         , myId(psliteid)
     {
+	//determine phub mode.
+	parsePHubArgs();
+	
         //worker doesn't care about directconnect.
         if (ps::Postoffice::Get()->num_servers() > 1 && DirectConnect == true)
         {
