@@ -9,7 +9,7 @@
 #include "ps/base.h"
 #include "dmlc/DIME.h"
 namespace ps {
-	Postoffice::Postoffice() 
+	Postoffice::Postoffice()
 	{
 		auto vanName = Environment::Get()->find("PSLITE_VAN_TYPE");
 		if (vanName == NULL)
@@ -30,11 +30,11 @@ namespace ps {
 		is_scheduler_ = role == "scheduler";
 		verbose_ = GetEnv("PS_VERBOSE", 0);
 	}
-  bool Started = false;
+	bool Started = false;
 	void Postoffice::Start(const char* argv0, const bool do_barrier) {
-	  CHECK(Started == false);
-	  Started = true;
-	  const char* role_str = ps::Environment::Get()->find("DMLC_ROLE");
+		CHECK(Started == false);
+		Started = true;
+		const char* role_str = ps::Environment::Get()->find("DMLC_ROLE");
 		auto IsServerNode = (role_str != nullptr) && (!strcmp(role_str, "server"));
 		//if(IsServerNode)
 		//  printf("[critical]server calling postoffice::start()\n");
@@ -84,18 +84,18 @@ namespace ps {
 		//printf("[%d][%d] PostOffice is up and running.\n", van_->my_node().id, van_->my_node().role);
 	}
 
-  void Postoffice::Finalize(const bool do_barrier) {
-	  // printf("[%d]Finalize1\n", van()->my_node().id);
-	  //auto myid = van()->my_node().id;
-	  if (do_barrier) Barrier(kWorkerGroup + kServerGroup + kScheduler,"finalizer");
-	  //printf("[%d]Finalize2\n",myid);
-	
+	void Postoffice::Finalize(const bool do_barrier) {
+		// printf("[%d]Finalize1\n", van()->my_node().id);
+		//auto myid = van()->my_node().id;
+		if (do_barrier) Barrier(kWorkerGroup + kServerGroup + kScheduler, "finalizer");
+		//printf("[%d]Finalize2\n",myid);
+
 		van_->Stop();
 		//printf("[%d]Finalize3\n",myid);
-	
+
 		if (exit_callback_) exit_callback_();
 		//printf("[%d]Finalize4\n",myid);
-	
+
 	}
 
 
@@ -130,13 +130,13 @@ namespace ps {
 		return obj;
 	}
 
-  void Postoffice::Barrier(int node_group, const std::string id) {
-    /* if(Postoffice::Get()->van()->my_node().role == 0)
-      {
-    printf("[%d][%d]requests barrier group=%d pl=%s\n",Postoffice::Get()->van()->my_node().id, Postoffice::Get()->van()->my_node().role,node_group,id.c_str());
-    print_stacktrace();
-    }*/
-    
+	void Postoffice::Barrier(int node_group, const std::string id) {
+		/* if(Postoffice::Get()->van()->my_node().role == 0)
+		  {
+		printf("[%d][%d]requests barrier group=%d pl=%s\n",Postoffice::Get()->van()->my_node().id, Postoffice::Get()->van()->my_node().role,node_group,id.c_str());
+		print_stacktrace();
+		}*/
+
 		if (GetNodeIDs(node_group).size() <= 1) return;
 		auto role = van_->my_node().role;
 		if (role == Node::SCHEDULER) {
@@ -171,17 +171,17 @@ namespace ps {
 	const std::vector<Range>& Postoffice::GetServerKeyRanges() {
 		if (server_key_ranges_.empty()) {
 			for (int i = 0; i < num_servers_; ++i) {
-			    //non IB this way.
-			    if(ps::Postoffice::Get()->van()->HasFeature(ps::Van::NativeInfiniband) == false)
-			    {
-				server_key_ranges_.push_back(Range(
-					kMaxKey / num_servers_ * i,
-					kMaxKey / num_servers_ * (i + 1)));
-			    }
-			    else
-			    {
-				server_key_ranges_.push_back(Range(0, kMaxKey));
-			    }
+				//non IB this way.
+				if (ps::Postoffice::Get()->van()->HasFeature(ps::Van::NativeInfiniband) == false)
+				{
+					server_key_ranges_.push_back(Range(
+						kMaxKey / num_servers_ * i,
+						kMaxKey / num_servers_ * (i + 1)));
+				}
+				else
+				{
+					server_key_ranges_.push_back(Range(0, kMaxKey));
+				}
 			}
 		}
 		return server_key_ranges_;
