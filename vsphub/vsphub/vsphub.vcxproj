@@ -26,6 +26,15 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\include\ps\phub.h" />
+    <ClInclude Include="..\..\src\Verbs.hpp" />
+    <ClInclude Include="..\..\src\zmq_van.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\src\PHub.cc" />
+    <ClCompile Include="..\..\src\postoffice.cc" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{da7a2263-d5f1-4de1-bd34-cae8097ec895}</ProjectGuid>
     <Keyword>Linux</Keyword>
@@ -60,8 +69,9 @@
   <ImportGroup Label="Shared" />
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros" />
-  <ItemGroup>
-  </ItemGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>C:\Users\Liang Luo\Source\Repos\ps-lite\include;C:\include;$(IncludePath)</IncludePath>
+  </PropertyGroup>
   <ItemDefinitionGroup />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
