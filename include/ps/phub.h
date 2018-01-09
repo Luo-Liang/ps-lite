@@ -3,11 +3,25 @@
 #include <infiniband/arch.h>
 #include <infiniband/verbs.h>
 #include <unordered_map>
+#include "Schedule.h"
+#include "../dmlc/logging.h"
+#include <gloo/context.h>
+#include <gloo/allreduce_halving_doubling.h>
+#include <gloo/allreduce_ring_chunked.h>
+#include <gloo/transport/ibverbs/device.h>
+#include <gloo/rendezvous/context.h>
+#include <gloo/rendezvous/redis_store.h>
+#include <gloo/algorithm.h>
 using namespace std;
 typedef uint32_t NodeId;
-typedef int BufferHandle;
-typedef int PHubKey;
+typedef uint64_t BufferHandle;
+typedef uint32_t PHubKey;
 
+#define ToHandle(nid, Handle) ((BufferHandle)(nid << 32 | Handle))
+#define NodeIdFromHandle(Handle) ((NodeId)(Handle >> 32))
+#define KeyFromHandle(Handle) ((PHubKey)(Handle & 0xFFFFFFFF))
+
+#define MAX_PHUB_NODES 1000
 
 class PHub
 {
@@ -32,26 +46,19 @@ class PHub
 		std::vector<int> Socket2CoreIdx;
 		std::vector<ibv_mr*> ib_DeviceMemoryRegions;
 	};
+	Schedule schedule;
+	vector<NodeId> remotes;
 
+	void initializeGlooSpecifics();
 public:
-	enum PHubRole
-	{
-		Worker,
-		Server
-	};
-	vector<tuple<NodeId, PHubKey>> myPartitions;
-	vector<tuple<PHubKey, NodeId>> destinations;
 	unordered_map<NodeId, string> nodeMap;
-	PHubRole role;
 	MachineConfigDescriptor machineConfig;
 	//keys that i take care of
 	NodeId ID;
-	PHub(vector<tuple<NodeId, PHubKey>> keys,
-		vector<tuple<PHubKey, NodeId>> dests,
+	PHub(Schedule schedule,
 		unordered_map<NodeId,string> nodeToIP,
-		PHubRole role,
 		NodeId Id);
 	void InitializeDevice();
 	int Push(NodeId destination, BufferHandle buf);
-
+	void InitializeDeviceSpecifics();
 };

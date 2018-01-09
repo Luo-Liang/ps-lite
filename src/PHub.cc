@@ -1,19 +1,21 @@
 #include "..\include\ps\phub.h"
-#include "zmq_van.h"
 #include <numa.h>
 #include <infiniband/arch.h>
 #include <infiniband/verbs.h>
+#include "..\include\ps\Schedule.h"
+#include <unordered_set>
+void PHub::initializeGlooSpecifics()
+{
+	auto pContext = std::make_shared<gloo::rendezvous::Context>(5,7);
+	pContext->connectFullMesh();
 
-PHub::PHub(vector<tuple<NodeId, PHubKey>> keys,
-	vector<tuple<PHubKey, NodeId>> dests,
+}
+PHub::PHub(Schedule operations,
 	unordered_map<NodeId, string> nodeToIP,
-	PHubRole myRole,
 	NodeId id)
 {
-	myPartitions = keys;
-	destinations = dests;
+	schedule = operations;
 	nodeMap = nodeToIP;
-	role = myRole;
 	//now connect that.
 	ID = id;
 }
@@ -113,10 +115,14 @@ void PHub::InitializeDevice()
 			ibv_device_attr dev_attr;
 			CHECK(ibv_query_device(ctx, &dev_attr)) << " error getting device attributes";
 			bool breakDueToDesiredDeviceFound = false;
-
+			auto desiredOption = getenv("PHUB_IB_PREFERRED_INTERFACE");
+			auto desiredOptionStr = string(desiredOption == NULL ? "" : desiredOption);
+			//mlx4_1@1
+			CHECK(desiredOptionStr.length() == 0 || desiredOptionStr.end()[-2] == '@') << " name@port is the format";
+			auto desiredDevPort = desiredOptionStr.end()[-1] - '0';
+			auto desiredDevIF = desiredOptionStr.substr(0, desiredOptionStr.length() - 2);
 			for (int p = 1; p < dev_attr.phys_port_cnt; p++)
 			{
-				
 				ibv_port_attr port_attribute;
 				CHECK(ibv_query_port(ctx, p, &port_attribute)) << " error getting port attributes";
 				MigrateToNumaNode(socketId);
@@ -126,13 +132,76 @@ void PHub::InitializeDevice()
 				{
 					continue;
 				}
+				//if no preference is specified, or a desired device and its port is found
+				//also, if it is not blocked 
+				if ((desiredDevIF.length() == 0 ||
+					(desiredDevIF == nameStr && desiredDevPort == p)) &&
+					blockedIFSet.find(nameStr) == blockedIFSet.end())
+				{
+					//include this interface.
+					machineConfig.ib_device_names.push_back(nameStr);
+					machineConfig.ib_device_guids.push_back(ntohll(ibv_get_device_guid(machineConfig.ib_devices[i])));
+					machineConfig.ib_devices_attribute.push_back(dev_attr);
+					machineConfig.ib_protection_domains.push_back(protection_domain);
+					machineConfig.ib_contexts.push_back(ctx);
+					machineConfig.ib_ports_attribute.push_back(port_attribute);
+					machineConfig.ib_ports.push_back(p);
+					machineConfig.ib_virtual_devices.push_back(machineConfig.ib_devices[i]);
+					machineConfig.ib_Device2SocketIdx.push_back(socketId);
 
-
+					if (desiredDevIF == nameStr && desiredDevPort == p)
+					{
+						breakDueToDesiredDeviceFound = true;
+						break;
+					}
+				}
+			}
+			if (breakDueToDesiredDeviceFound)
+			{
+				break;
 			}
 		}
+		//the direct connect approach is deprecated
+		CHECK(machineConfig.ib_protection_domains.size() == machineConfig.ib_contexts.size());
+		CHECK(machineConfig.ib_protection_domains.size() == machineConfig.ib_device_names.size());
+		CHECK(machineConfig.ib_protection_domains.size() == machineConfig.ib_virtual_devices.size());
+		CHECK(machineConfig.ib_protection_domains.size() == machineConfig.ib_device_guids.size());
+		CHECK(machineConfig.ib_protection_domains.size() == machineConfig.ib_devices_attribute.size());
+		CHECK(machineConfig.ib_protection_domains.size() == machineConfig.ib_ports_attribute.size());
+		CHECK(machineConfig.ib_protection_domains.size() == machineConfig.ib_ports.size());
+		CHECK(machineConfig.ib_protection_domains.size() == machineConfig.ib_Device2SocketIdx.size());
 	}
+	machineConfig.Initialized = true;
+	//add more code to support non-IB cards.
+	//not for now
+}
 
-} 
+void PHub::InitializeDeviceSpecifics()
+{
+	//this is the place to initialize device specific structures, such as ...
+	//queue pairs.
+	//use redis for rendezvous
+	//figure out from schedule who i need to get in touch with
+	for (auto& sched : schedule.Steps)
+	{
+		OperatorContext& ctx = std::get<1>(sched);
+		for(auto handle : ctx.outputs)
+		{
+			auto node = NodeIdFromHandle(handle);
+			CHECK(node < MAX_PHUB_NODES) << node << " is larger than supported";
+			remotes.push_back(node);
+		}
+
+		for (auto handle : ctx.inputs)
+		{
+			auto node = NodeIdFromHandle(handle);
+			CHECK(node < MAX_PHUB_NODES) << node << " is larger than supported";
+			remotes.push_back(node);
+		}
+	}
+	//use 1 queue pair for a remote interface.
+
+}
 
 int PHub::Push(NodeId destination, BufferHandle buf)
 {
