@@ -4,13 +4,8 @@
 #include <infiniband/verbs.h>
 #include "..\include\ps\Schedule.h"
 #include <unordered_set>
-void PHub::initializeGlooSpecifics()
-{
-	auto pContext = std::make_shared<gloo::rendezvous::Context>(5,7);
-	pContext->connectFullMesh();
 
-}
-PHub::PHub(Schedule operations,
+PHub::PHub(Schedule operations, string redezvousUri,
 	unordered_map<NodeId, string> nodeToIP,
 	NodeId id)
 {
@@ -18,6 +13,7 @@ PHub::PHub(Schedule operations,
 	nodeMap = nodeToIP;
 	//now connect that.
 	ID = id;
+	RendezvousUri = redezvousUri;
 }
 
 void PHub::InitializeDevice()
@@ -178,26 +174,85 @@ void PHub::InitializeDevice()
 
 void PHub::InitializeDeviceSpecifics()
 {
+	CHECK(machineConfig.Initialized);
+	auto redisVec = CxxxxStringSplit(RendezvousUri, ':');
+	CHECK(redisVec.size() == 2);
+	var redisAddr = redisVec[0];
+	var redisPort = atoi(redisVec[1].c_str());
+	CHECK(redisPort != -1);
 	//this is the place to initialize device specific structures, such as ...
 	//queue pairs.
 	//use redis for rendezvous
 	//figure out from schedule who i need to get in touch with
-	for (auto& sched : schedule.Steps)
+	pRedisStore = make_shared<gloo::rendezvous::RedisStore>(redisAddr, redisPort);
+	CHECK(machineConfig.ib_device_names.size() > 0);
+	var attribute = gloo::transport::ibverbs::attr();
+	attribute.index = 0;
+	attribute.name = std::string(machineConfig.ib_device_names[0]);
+	attribute.port = machineConfig.ib_ports[0];
+	pGlooDefaultDevice = gloo::transport::ibverbs::CreateDevice(attribute);
+	phubRendezvous = make_shared<Rendezvous>(redisAddr, redisPort);
+	phubRendezvous->Connect();
+	//gloo::transport::Device 
+	for (auto& step : schedule.Steps)
 	{
-		OperatorContext& ctx = std::get<1>(sched);
-		for(auto handle : ctx.outputs)
+		OperatorContext* pctx = &(std::get<1>(step));
+		IOperator& op = std::get<0>(step);
+		std::sort(pctx->inputs.begin(), pctx->inputs.end());
+		std::sort(pctx->outputs.begin(), pctx->outputs.end());
+		switch (op.Type)
 		{
-			auto node = NodeIdFromHandle(handle);
-			CHECK(node < MAX_PHUB_NODES) << node << " is larger than supported";
-			remotes.push_back(node);
+			case GlooCollectiveAlgorithm:
+			{
+				//here we need to initialize lots of gloo contexts.
+				//how many people i need to synchronize with?
+				//first, check inputs and outputs are the same.
+				//collectives only synchronize to the same nodes.
+
+				//am I in this step?
+				//gloo expects different ranks than us.
+				CHECK(pctx->inputs.size() == pctx->outputs.size());
+				CHECK(pctx->inputs == pctx->outputs);
+				CHECK(pctx->typeCode == OperatorContext::OperatorContextTypeCode::LocallyAvailable);
+				//figure out who are the nodes.
+				vector<NodeId> nodes;
+				for (auto handle : pctx->inputs)
+				{
+					//inputs to gloo must be all local
+					CHECK(NodeIdFromHandle(handle) == ID);
+					nodes.push_back(NodeIdFromHandle(handle));
+				}
+				std::sort(nodes.begin(), nodes.end());
+				auto idx = CxxxxBinarySearch(nodes.begin(), nodes.end(), ID);
+				if (idx < 0)
+				{
+					//we do not participate in this operation.
+					op.Participate = false;
+				}
+				else
+				{
+					//figure out what keys are needed locally?
+					//these keys are in inputs.
+
+					//extract 
+					std::shared_ptr<gloo::rendezvous::Context> pContext = std::make_shared<gloo::rendezvous::Context>(idx, pctx->inputs.size());
+					pctx->additionalContext = pContext;
+					op.Participate = true;
+					//attempt to connect to this mesh
+					pContext->connectFullMesh(*pRedisStore, pGlooDefaultDevice);
+					//create this context.
+				}
+			}
+			default:
+			{
+				CHECK(false) << " Not implemented.";
+			}
 		}
 
-		for (auto handle : ctx.inputs)
-		{
-			auto node = NodeIdFromHandle(handle);
-			CHECK(node < MAX_PHUB_NODES) << node << " is larger than supported";
-			remotes.push_back(node);
-		}
+
+		//make sure everyone has executed this step.
+		//barrier
+		phubRendezvous->SynchronousBarrier(op.GetUniqueName(), nodeMap.size());
 	}
 	//use 1 queue pair for a remote interface.
 

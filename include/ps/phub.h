@@ -12,6 +12,8 @@
 #include <gloo/rendezvous/context.h>
 #include <gloo/rendezvous/redis_store.h>
 #include <gloo/algorithm.h>
+#include "internal/ext.h"
+#include "rendezvous.h"
 using namespace std;
 typedef uint32_t NodeId;
 typedef uint64_t BufferHandle;
@@ -49,15 +51,20 @@ class PHub
 	Schedule schedule;
 	vector<NodeId> remotes;
 
-	void initializeGlooSpecifics();
 public:
 	unordered_map<NodeId, string> nodeMap;
 	MachineConfigDescriptor machineConfig;
-	//keys that i take care of
+	//my global ID
 	NodeId ID;
-	PHub(Schedule schedule,
+	PHub(Schedule schedule, string redezvousUri,
 		unordered_map<NodeId,string> nodeToIP,
+		unordered_map<PHubKey, size_t> size,
 		NodeId Id);
+	string RendezvousUri;
+
+	shared_ptr<Rendezvous> phubRendezvous = NULL;
+	shared_ptr<gloo::rendezvous::RedisStore> pRedisStore = NULL;
+	shared_ptr<gloo::transport::Device> pGlooDefaultDevice = NULL;
 	void InitializeDevice();
 	int Push(NodeId destination, BufferHandle buf);
 	void InitializeDeviceSpecifics();

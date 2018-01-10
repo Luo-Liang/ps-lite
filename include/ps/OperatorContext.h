@@ -1,19 +1,38 @@
 #pragma once
 #include "phub.h"
 #include <vector>
+
 class OperatorContext
 {
-
 public:
+	enum OperatorContextTypeCode
+	{
+		General,
+		LocallyAvailable
+	};
 	OperatorContext(vector<BufferHandle> in,
-		vector<BufferHandle> out, 
-		void* additionalCtx)
+		vector<BufferHandle> out) : Initialized(false)
 	{
 		inputs = in;
 		outputs = out;
-		additionalContext = additionalCtx;
 	}
+	bool Initialized;
 	vector<BufferHandle> inputs;
 	vector<BufferHandle> outputs;
-	void* additionalContext;
+	shared_ptr<void*> additionalContext = NULL;
+	OperatorContextTypeCode typeCode = OperatorContextTypeCode::General;
+};
+
+template <class T>
+class LocallyAvailableOperatorContext : public OperatorContext
+{
+public:
+	LocallyAvailableOperatorContext(vector<BufferHandle> in,
+		vector<BufferHandle> out) 
+		: OperatorContext(in, out)
+	{
+		typeCode = OperatorContext::OperatorContextTypeCode::LocallyAvailable;
+	}
+	vector<T*> inputAddrs;
+	vector<size_t> inputLens;
 };
