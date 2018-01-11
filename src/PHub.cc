@@ -213,6 +213,7 @@ void PHub::InitializeDeviceSpecifics()
 				//gloo expects different ranks than us.
 				CHECK(pctx->inputs.size() == pctx->outputs.size());
 				CHECK(pctx->inputs == pctx->outputs);
+				//check input lens are identical, for gloo.
 				CHECK(pctx->typeCode == OperatorContext::OperatorContextTypeCode::LocallyAvailable);
 				//figure out who are the nodes.
 				vector<NodeId> nodes;

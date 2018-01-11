@@ -16,26 +16,62 @@ enum OperatorType
 class IOperator
 {
 public:
-	 virtual OperatorHandle RunAsync(OperatorContext* context) = 0;
-	 string Name;
-	 OperatorType Type;
-	 int Sequence = -1;
-	 bool Participate = false;
-	 virtual std::string GetUniqueName()
-	 {
-		 return std::to_string(Sequence) + ":" + Name;
-	 }
+	virtual OperatorHandle Run() = 0;
+	string Name;
+	OperatorType Type;
+	int Sequence = -1;
+	bool Participate = false;
+	bool Initialized = false;
+	virtual std::string GetUniqueName()
+	{
+		return std::to_string(Sequence) + ":" + Name;
+	}
+	virtual void Initialize(OperatorContext* context) = 0;
 };
 
 template <class T>
-class GlooAllReduceHalvingAndDoubling : IOperator
+class GlooAlgorithms : IOperator
 {
-	shared_ptr<gloo::AllreduceHalvingDoubling<T>> reducer;
+	shared_ptr<gloo::Algorithm> reducer = NULL;
 public:
-	virtual OperatorHandle RunAsync(OperatorContext* context) override
+	virtual void Initialize(OperatorContext* context) override
 	{
-		var pctx = LocallyAvailableOperatorContext<T>*(context);
-		
-		reducer = make_shared<gloo::AllreduceHalvingDoubling<T>>((gloo::rendezvous::Context*)context->additionalContext.get(), p  , );
+		LocallyAvailableOperatorContext<T>* pctx = (LocallyAvailableOperatorContext<T>*)(context);
+		CHECK(pctx->typeCode == OperatorContext::OperatorContextTypeCode::LocallyAvailable);
+		//check each inpuit lens is identical.
+		CHECK(pctx->inputAddrs.size() > 0);
+		CHECK(pctx->inputAddrs.size() == pctx.inputLens.size());
+		CHECK(std::adjacent_find(pctx->inputLens.begin(), pctx->inputLens.end(), std::not_equal_to<int>()) == pctx->inputLens.end()) << "lens of elements are different!";
+	}
+
+	virtual OperatorHandle Run() override
+	{
+		CHECK(Initialized);
+		reducer->run();
 	}
 };
+
+template <class T>
+class GlooHalvingAndDoubling : public GlooAlgorithms<T>
+{
+public:
+	virtual void Initialize(OperatorContext* context) override
+	{
+		GlooAlgorithms<T>::Initialize(context);
+		LocallyAvailableOperatorContext<T>* pctx = (LocallyAvailableOperatorContext<T>*)(context);
+		reducer = make_shared<gloo::AllreduceHalvingDoubling<T>>((gloo::Context*)pctx->additionalContext, pctx->inputAddrs, pctx->inputLens.at(0));
+	}
+};
+
+template <class T>
+class GlooRingChunked : public GlooAlgorithms<T>
+{
+public:
+	virtual void Initialize(OperatorContext* context) override
+	{
+		GlooAlgorithms<T>::Initialize(context);
+		LocallyAvailableOperatorContext<T>* pctx = (LocallyAvailableOperatorContext<T>*)(context);
+		reducer = make_shared<gloo::AllreduceRingChunked<T>>((gloo::Context*)pctx->additionalContext, pctx->inputAddrs, pctx->inputLens.at(0));
+	}
+};
+
