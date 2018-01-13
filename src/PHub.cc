@@ -194,13 +194,15 @@ void PHub::InitializeDeviceSpecifics()
 	phubRendezvous = make_shared<Rendezvous>(redisAddr, redisPort);
 	phubRendezvous->Connect();
 	//gloo::transport::Device 
-	for (auto& step : schedule.Steps)
+	//I only care about my schedule
+	var mySchedule = schedule.Filter(ID);
+	for (auto& step : mySchedule->Components)
 	{
-		OperatorContext* pctx = &(std::get<1>(step));
-		IOperator& op = std::get<0>(step);
+		var pctx = step->pContext;
+		var op = step->pOperator;
 		std::sort(pctx->inputs.begin(), pctx->inputs.end());
 		std::sort(pctx->outputs.begin(), pctx->outputs.end());
-		switch (op.Type)
+		switch (op->Type)
 		{
 			case GlooCollectiveAlgorithm:
 			{
