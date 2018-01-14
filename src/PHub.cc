@@ -227,24 +227,13 @@ void PHub::InitializeDeviceSpecifics()
 				}
 				std::sort(nodes.begin(), nodes.end());
 				auto idx = CxxxxBinarySearch(nodes.begin(), nodes.end(), ID);
-				if (idx < 0)
-				{
-					//we do not participate in this operation.
-					op.Participate = false;
-				}
-				else
-				{
-					//figure out what keys are needed locally?
-					//these keys are in inputs.
-
-					//extract 
-					std::shared_ptr<gloo::rendezvous::Context> pContext = std::make_shared<gloo::rendezvous::Context>(idx, pctx->inputs.size());
-					pctx->additionalContext = pContext;
-					op.Participate = true;
-					//attempt to connect to this mesh
-					pContext->connectFullMesh(*pRedisStore, pGlooDefaultDevice);
-					//create this context.
-				}
+				//figure out what keys are needed locally?
+				//these keys are in inputs.
+				std::shared_ptr<gloo::rendezvous::Context> pContext = std::make_shared<gloo::rendezvous::Context>(idx, pctx->inputs.size());
+				pctx->additionalContext = pContext;
+				//attempt to connect to this mesh
+				pContext->connectFullMesh(*pRedisStore, pGlooDefaultDevice);
+				//create this context.
 			}
 			default:
 			{
@@ -255,7 +244,7 @@ void PHub::InitializeDeviceSpecifics()
 
 		//make sure everyone has executed this step.
 		//barrier
-		phubRendezvous->SynchronousBarrier(op.GetUniqueName(), nodeMap.size());
+		phubRendezvous->SynchronousBarrier(op->GetUniqueName(), nodeMap.size());
 	}
 	//use 1 queue pair for a remote interface.
 
