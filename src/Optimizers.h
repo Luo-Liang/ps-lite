@@ -27,10 +27,15 @@ class PHubOptimizer : IOperator
 {
 public:
 	shared_ptr<NAGTTOptimizer> opt;
-	virtual void Initialize(OperatorContext* context)
+	size_t numAggregated = -1;
+	std::unordered_map<int,int> keyMap;
+	PHubAllocator* allocator;
+	virtual void Initialize(OperatorContext* context) override
 	{
 		CHECK(context->typeCode == OperatorContext::LocallyAvailable);
-		opt = make_shared<NAGTTOptimizer>();
+		CHECK(numAggregated > 0);
+		CHECK(allocator);
+		opt = make_shared<NAGTTOptimizer>(numAggregated, keyMap, prefetch_distance, allocator);
 	}
 };
 

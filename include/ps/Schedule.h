@@ -21,6 +21,7 @@ public:
 		pContext = s_pContext;
 		pOperator = s_pOperator;
 	}
+	void* Annotation;
 };
 class Schedule
 {
@@ -36,29 +37,67 @@ public:
 			//assuming 6 machines.
 			//1 2 3,  4 5 6 on different racks.
 			//the schedule uses collectives to synchronize 1 2 3, then 4 5 6, then 1 and 4, then 
-			vector<BufferHandle> n1in = { ToBufferHandle(0,0),ToBufferHandle(1,0),ToBufferHandle(2,0) };
-			vector<BufferHandle> n1out = { ToBufferHandle(0,0),ToBufferHandle(1,0),ToBufferHandle(2,0) };
-			auto n1Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n1in, n1out);
+			vector<BufferHandle> n1InOut = { ToBufferHandle(0,0) };
+			auto n1Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n1InOut, n1InOut);
 			auto n1Opt = make_shared<GlooHalvingAndDoubling<float>>();
 			auto n1 = make_shared<ScheduleNode>(n1Ctx, n1Opt);
+			n1.Annotation = (void*)3;
+			n1.RunOn = {1,2,3};
 			s.Components.push_back(n1);
 
-			vector<BufferHandle> n2in = { ToBufferHandle(3,0),ToBufferHandle(4,0),ToBufferHandle(5,0) };
-			vector<BufferHandle> n2out = { ToBufferHandle(3,0),ToBufferHandle(4,0),ToBufferHandle(5,0) };
-			auto n2Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n2in, n1out);
+			vector<BufferHandle> n2InOut = { ToBufferHandle(0,0) };
+			auto n2Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n2InOut, n2InOut);
 			auto n2Opt = make_shared<GlooHalvingAndDoubling<float>>();
 			auto n2 = make_shared<ScheduleNode>(n2Ctx, n2Opt);
+			n2.Annotation = (void*)3;
+			n2.RunOn = {3,4,5};
 			s.Components.push_back(n2);
 
 			//we now sycnhronize p0 and p3
-			vector<BufferHandle> n3in = { ToBufferHandle(0,0),ToBufferHandle(3,0) };
-			vector<BufferHandle> n3out = { ToBufferHandle(0,0),ToBufferHandle(3,0) };
-			auto n3Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n3in, n3out);
+			vector<BufferHandle> n3InOut = { ToBufferHandle(0,0),ToBufferHandle(3,0) };
+			//vector<BufferHandle> n3out = { ToBufferHandle(0,0),ToBufferHandle(3,0) };
+			auto n3Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n3InOut, n3InOut);
 			auto n3Opt = make_shared<GlooHalvingAndDoubling<float>>();
 			auto n3 = make_shared<ScheduleNode>(n3Ctx, n3Opt);
+			n3.Annotation = (void*)6;
+			n3.RunOn = {1,4};
 			s.Components.push_back(n3);
 
 			//we now perform an optimization step on p0 and p3
+			vector<BufferHandle> n4InOut = {ToBufferHandle(0,0)};
+			auto n4Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n4InOut, n4InOut);
+			auto n4Opt = make_shared<PHubOptimizer>();
+			auto n4 = make_shared<ScheduleNode>(n4Ctx, n4Opt);
+			n4.Annotation = NULL;
+			n4Opt->numAggregated = (size_t)n3.Annotation;
+			n4.RunOn = {1,4};
+			s.Components.push_back(n4);
+
+			
+			//now broadcast back to p1 p2
+			vector<BufferHandle> n5In = {ToBufferHandle(0,0)};
+			vector<BufferHandle> n5Out = {ToBufferHandle(1,0), ToBufferHandle(2,0)};
+			auto n5Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n5In, n5Out);
+			auto n5Opt = make_shared<PHubBroadCast>();
+			auto n5 = make_shared<ScheduleNode>(n5Ctx, n5Opt);
+			n5.Annotation = NULL;
+			n5.RunOn = {1,2,3};
+
+			//now broadcast back to p5 p6
+			vector<BufferHandle> n6In = {ToBufferHandle(4,0)};
+			vector<Bufferhandle> n6Out = {ToBufferHandle(5,0), ToBufferHandle(6,0)};
+			auto n6Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n6In, n6Out);
+			auto n6Opt = make_shared<PHubBroadCast>();
+			auto n6 = make_shared<ScheduleNode>(n6Ctx, n6Opt);
+			n6.Annotation = NULL;
+			n6.RunOn = {4,5,6};
+
+			//we are done.
+			//set up dependency.
+			
+			
+
+			
 
 		}
 		else if (desc == "hybridcross2racks")
