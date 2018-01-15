@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|ARM">
@@ -27,8 +27,14 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\include\ps\internal\ext.h" />
+    <ClInclude Include="..\..\include\ps\Operator.h" />
+    <ClInclude Include="..\..\include\ps\OperatorContext.h" />
     <ClInclude Include="..\..\include\ps\phub.h" />
+    <ClInclude Include="..\..\include\ps\rendezvous.h" />
     <ClInclude Include="..\..\include\ps\Schedule.h" />
+    <ClInclude Include="..\..\src\GlooVan.h" />
+    <ClInclude Include="..\..\src\Optimizers.h" />
     <ClInclude Include="..\..\src\PHUB.h" />
     <ClInclude Include="..\..\src\PHubAllocator.h" />
     <ClInclude Include="..\..\src\pshub_van.h" />
@@ -74,7 +80,7 @@
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>C:\Users\Liang Luo\Source\Repos\ps-lite\include;C:\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Users\Liang Luo\Source\Repos\ps-lite\gloo;C:\Users\Liang Luo\Source\Repos\ps-lite\include;C:\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
     <IncludePath>C:\Users\liangluo\Source\Repos\ps-lite\gloo;C:\Users\liangluo\Source\Repos\ps-lite\include;C:\INTELLISENSE\include;$(IncludePath)</IncludePath>

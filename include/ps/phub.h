@@ -19,9 +19,9 @@ typedef uint32_t NodeId;
 typedef uint64_t BufferHandle;
 typedef uint32_t PHubKey;
 
-#define ToHandle(nid, Handle) ((BufferHandle)(nid << 32 | Handle))
-#define NodeIdFromHandle(Handle) ((NodeId)(Handle >> 32))
-#define KeyFromHandle(Handle) ((PHubKey)(Handle & 0xFFFFFFFF))
+#define ToBufferHandle(nid, handle) ((BufferHandle)(nid << 32 | handle))
+#define NodeIdFromHandle(handle) ((NodeId)(handle >> 32))
+#define KeyFromHandle(handle) ((PHubKey)(handle & 0xFFFFFFFF))
 
 #define MAX_PHUB_NODES 1000
 

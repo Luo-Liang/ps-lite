@@ -81,8 +81,6 @@ public:
 		//this one better be false for Gloo to work efficiently.
 		bool metaBufferImmediatelyBeforeKVBuffer)
 	{
-		//keep the keySizes.
-		keyMap = keySizes;
 		MetaBufferImmediatelyBeforeKVBuffer = metaBufferImmediatelyBeforeKVBuffer;
 		int metaSize = metaBufferSize;
 		socketCount = socketCnt;
@@ -261,5 +259,4 @@ private:
 	size_t AllocationLength = 0;
 	bool Initialized = false;
 	size_t socketCount = 0;
-	unordered_map<int, int> keyMap;
 };

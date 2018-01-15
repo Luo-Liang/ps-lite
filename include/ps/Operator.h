@@ -75,3 +75,5 @@ public:
 	}
 };
 
+template <class T>
+class PHubOptimizer;
