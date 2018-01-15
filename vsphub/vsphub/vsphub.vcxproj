@@ -28,6 +28,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\include\ps\phub.h" />
+    <ClInclude Include="..\..\include\ps\Schedule.h" />
+    <ClInclude Include="..\..\src\PHUB.h" />
+    <ClInclude Include="..\..\src\PHubAllocator.h" />
+    <ClInclude Include="..\..\src\pshub_van.h" />
     <ClInclude Include="..\..\src\Verbs.hpp" />
     <ClInclude Include="..\..\src\zmq_van.h" />
   </ItemGroup>
@@ -73,7 +77,7 @@
     <IncludePath>C:\Users\Liang Luo\Source\Repos\ps-lite\include;C:\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
-    <IncludePath>C:\Users\liangluo\Source\Repos\ps-lite\include;C:\INTELLISENSE\include;$(IncludePath)</IncludePath>
+    <IncludePath>C:\Users\liangluo\Source\Repos\ps-lite\gloo;C:\Users\liangluo\Source\Repos\ps-lite\include;C:\INTELLISENSE\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
