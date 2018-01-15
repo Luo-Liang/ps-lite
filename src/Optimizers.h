@@ -22,22 +22,7 @@ class NAGTNTOptimizer;
 class NAGNTTOptimizer;
 class NAGTTOptimizer;
 
-template <class T>
-class PHubOptimizer : IOperator
-{
-public:
-	shared_ptr<NAGTTOptimizer> opt;
-	size_t numAggregated = -1;
-	std::unordered_map<int,int> keyMap;
-	PHubAllocator* allocator;
-	virtual void Initialize(OperatorContext* context) override
-	{
-		CHECK(context->typeCode == OperatorContext::LocallyAvailable);
-		CHECK(numAggregated > 0);
-		CHECK(allocator);
-		opt = make_shared<NAGTTOptimizer>(numAggregated, keyMap, prefetch_distance, allocator);
-	}
-};
+
 
 class Optimizer
 {
@@ -1454,3 +1439,20 @@ inline Aggregator* Aggregator::Create(std::string name, const size_t prefetch_di
 		assert(false);
 	}
 }
+
+
+template <class T>
+class PHubOptimizer : IOperator
+{
+public:
+	shared_ptr<NAGTTOptimizer> opt;
+	size_t numAggregated = -1;
+	//PHubAllocator* allocator;
+	virtual void Initialize(OperatorContext* context) override
+	{
+		CHECK(context->typeCode == OperatorContext::LocallyAvailable);
+		CHECK(numAggregated > 0);
+		CHECK(allocator);
+		opt = make_shared<NAGTTOptimizer>(numAggregated, PHubAllocator::INSTANCE, 0x240,);
+	}
+};
