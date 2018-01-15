@@ -204,41 +204,41 @@ void PHub::InitializeDeviceSpecifics()
 		std::sort(pctx->outputs.begin(), pctx->outputs.end());
 		switch (op->Type)
 		{
-			case GlooCollectiveAlgorithm:
-			{
-				//here we need to initialize lots of gloo contexts.
-				//how many people i need to synchronize with?
-				//first, check inputs and outputs are the same.
-				//collectives only synchronize to the same nodes.
+		case GlooCollectiveAlgorithm:
+		{
+			//here we need to initialize lots of gloo contexts.
+			//how many people i need to synchronize with?
+			//first, check inputs and outputs are the same.
+			//collectives only synchronize to the same nodes.
 
-				//am I in this step?
-				//gloo expects different ranks than us.
-				CHECK(pctx->inputs.size() == pctx->outputs.size());
-				CHECK(pctx->inputs == pctx->outputs);
-				//check input lens are identical, for gloo.
-				CHECK(pctx->typeCode == OperatorContext::OperatorContextTypeCode::LocallyAvailable);
-				//figure out who are the nodes.
-				vector<NodeId> nodes;
-				for (auto handle : pctx->inputs)
-				{
-					//inputs to gloo must be all local
-					CHECK(NodeIdFromHandle(handle) == ID);
-					nodes.push_back(NodeIdFromHandle(handle));
-				}
-				std::sort(nodes.begin(), nodes.end());
-				auto idx = CxxxxBinarySearch(nodes.begin(), nodes.end(), ID);
-				//figure out what keys are needed locally?
-				//these keys are in inputs.
-				std::shared_ptr<gloo::rendezvous::Context> pContext = std::make_shared<gloo::rendezvous::Context>(idx, pctx->inputs.size());
-				pctx->additionalContext = pContext;
-				//attempt to connect to this mesh
-				pContext->connectFullMesh(*pRedisStore, pGlooDefaultDevice);
-				//create this context.
-			}
-			default:
+			//am I in this step?
+			//gloo expects different ranks than us.
+			CHECK(pctx->inputs.size() == pctx->outputs.size());
+			CHECK(pctx->inputs == pctx->outputs);
+			//check input lens are identical, for gloo.
+			CHECK(pctx->typeCode == OperatorContext::OperatorContextTypeCode::LocallyAvailable);
+			//figure out who are the nodes.
+			vector<NodeId> nodes;
+			for (auto handle : pctx->inputs)
 			{
-				CHECK(false) << " Not implemented.";
+				//inputs to gloo must be all local
+				CHECK(NodeIdFromHandle(handle) == ID);
+				nodes.push_back(NodeIdFromHandle(handle));
 			}
+			std::sort(nodes.begin(), nodes.end());
+			auto idx = CxxxxBinarySearch(nodes.begin(), nodes.end(), ID);
+			//figure out what keys are needed locally?
+			//these keys are in inputs.
+			std::shared_ptr<gloo::rendezvous::Context> pContext = std::make_shared<gloo::rendezvous::Context>(idx, pctx->inputs.size());
+			pctx->additionalContext = pContext;
+			//attempt to connect to this mesh
+			pContext->connectFullMesh(*pRedisStore, pGlooDefaultDevice);
+			//create this context.
+		}
+		default:
+		{
+			CHECK(false) << " Not implemented.";
+		}
 		}
 
 

@@ -25,6 +25,28 @@ typedef uint32_t PHubKey;
 
 #define MAX_PHUB_NODES 1000
 
+struct KeyDesc
+{
+	PHubKey Key;
+	EndPoint EP;
+};
+//represent one connection of two infiniband or IP nodes
+struct EndPoint
+{
+	uint16_t lid = -1;        // InfiniBand address of node. Remote Lid
+	uint32_t qp_num = -1;     // Queue pair number on node (like IP port number)
+	ibv_qp * queue_pair = NULL;
+	int DeviceIdx = -1;
+	int SocketIdx = -1;
+	int RemoteMachineIdx = -1;
+	int CoreIdx = -1;
+	int RemoteQPIdx = -1;
+	int CQIdx = -1;
+	int Index = -1;
+	uint32_t RemoteKey = 0;
+	uint16_t LocalLid = 0;
+};
+
 class PHub
 {
 	struct MachineConfigDescriptor
@@ -61,7 +83,7 @@ public:
 		unordered_map<PHubKey, size_t> size,
 		NodeId Id);
 	string RendezvousUri;
-
+	
 	shared_ptr<Rendezvous> phubRendezvous = NULL;
 	shared_ptr<gloo::rendezvous::RedisStore> pRedisStore = NULL;
 	shared_ptr<gloo::transport::Device> pGlooDefaultDevice = NULL;

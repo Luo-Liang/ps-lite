@@ -34,5 +34,6 @@ public:
 		typeCode = OperatorContext::OperatorContextTypeCode::LocallyAvailable;
 	}
 	vector<T*> inputAddrs;
-	vector<size_t> inputLens;
+	size_t lens;
+	vector<T*> outputAddrs;
 };
