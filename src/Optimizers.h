@@ -23,33 +23,23 @@ class Optimizer
 {
 public:
 	//name of optimizer, number of keys to be optimized, number of machines
-	static Optimizer* Create(std::string name, size_t numMachines, std::unordered_map<int, int>& keySizes, const size_t prefetch_distance, vector<KeyDesc>& keyDescs);
-	void PopulateTrainingParams(uint size, float* vals)
+	void PopulateTrainingParams(float learningRate, float wd, float mom, float gradScale)
 	{
-		CHECK(States.size() * 2 + 2 == size);
 		//CHECK(NegationOfLearningRates.size() == size);
 		//CHECK(WeightDecays.size() == size);
-		int keySizes = States.size();
-		for (size_t i = 0; i < NegationOfLearningRates.size(); i++)
-		{
-			NegationOfLearningRates.at(i) = _mm_set1_ps(-1 * vals[i]);
-			//printf("[note][PHUB] vkey = %d, lr = %f\n", i, vals[i]);
-		}
-		for (size_t i = 0; i < WeightDecays.size(); i++)
-		{
-			WeightDecays.at(i) = _mm_set1_ps(vals[i + keySizes]);
-			//printf("[note][PHUB] vkey = %d, wd = %f\n", i, vals[i + keySizes]);
-		}
-		MomentumConstant = _mm_set1_ps(vals[keySizes * 2]);
-		GradRescaling = _mm_set1_ps(vals[keySizes * 2 + 1]);
-		printf("[note][PHUB] setting mom = %f, gradrescale = %f and learning rate and weight decays.\n", vals[keySizes * 2], vals[keySizes * 2 + 1]);
+		NegationOfLearningRate = _mm_set1_ps(-1 * learningRate);
+		WeightDecay = _mm_set1_ps(wd);
+		MomentumConstant = _mm_set1_ps(mom);
+		GradRescaling = _mm_set1_ps(gradScale);
+		printf("[note][PHUB] setting mom = %f, gradrescale = %f and learning rate and weight decays.\n", mom, learningRate]);
 	}
-	virtual void Update(size_t index, float* weightBuffer, float* gradBuffer, size_t bufferLen) {}
+	virtual void Update(PHubKey key, float* weightBuffer, float* gradBuffer, size_t bufferLen) {}
 
 protected:
-	Optimizer(size_t numMachines, std::unordered_map<int, int>& keySizes, const size_t prefetch_distance, vector<KeyDesc>& keyDescs)
+	Optimizer(size_t numMachines, PHubKey key, size_t len, const size_t prefetch_distance, KeyDesc& keyDesc)
 		: prefetch_distance(prefetch_distance)
 	{
+		Key = key;
 		MachineCount = numMachines;
 		//populate momentumconstant, learningrates, and weightdecays, gradrescaling.
 		float rescale = 1.0f / 128; // 1 / batch size
@@ -57,85 +47,71 @@ protected:
 
 		//weight decays. this one we need to copy the orig from mxnet, but assign 0.00001 at first.
 		auto initWd = 1.0e-5f;
-		WeightDecays.resize(keySizes.size());
-		for (size_t i = 0; i < WeightDecays.size(); i++)
-		{
-			WeightDecays[i] = _mm_set1_ps(initWd);
-		}
+		//work on only 1 keys.
+		WeightDecay = _mm_set1_ps(initWd);
 		//learning rates.
 		auto initLR = 0.1f;
-		NegationOfLearningRates.resize(keySizes.size());
-		for (size_t i = 0; i < NegationOfLearningRates.size(); i++)
-		{
-			NegationOfLearningRates[i] = _mm_set1_ps(-1 * initLR);
-		}
+		NegationOfLearningRate = _mm_set1_ps(-1 * initLR);
 		//momentum constants
 		MomentumConstant = _mm_set1_ps(0.9f);
 
 		//initialize current states.
-		States.resize(keySizes.size());
-		StateLengths.resize(keySizes.size());
-		for (size_t i = 0; i < States.size(); i++)
+		//make this a multiple of INSTRUCTION_VECTOR_SIZE so we dont need to deal with remainder.
+		auto bytes = RoundUp((size_t)len, INSTRUCTION_VECTOR_SIZE) * sizeof(float);
+		//if (verbs == NULL || verbs->DirectConnect || verbs->Helper_Server_IsItMyKey(i) == false)
+		//{
+		//	//verbs may be NULL if Gloo
+		//	//if this key is not mine, i still create a buffer for it.
+		//	//just that i don't care which node it is on.
+		//	state[i] = (float*)memalign(INSTRUCTION_VECTOR_SIZE * sizeof(float), bytes);
+		//}
+		//else
 		{
-			//make this a multiple of INSTRUCTION_VECTOR_SIZE so we dont need to deal with remainder.
-			auto bytes = RoundUp((size_t)keySizes[i] / sizeof(float), INSTRUCTION_VECTOR_SIZE) * sizeof(float);
-			//if (verbs == NULL || verbs->DirectConnect || verbs->Helper_Server_IsItMyKey(i) == false)
-			//{
-			//	//verbs may be NULL if Gloo
-			//	//if this key is not mine, i still create a buffer for it.
-			//	//just that i don't care which node it is on.
-			//	States[i] = (float*)memalign(INSTRUCTION_VECTOR_SIZE * sizeof(float), bytes);
-			//}
-			//else
-			{
-				//NUMA Aware.
-				auto mySock = keyDescs[i].EP.SocketIdx;
-				States[i] = (float*)AlignedAllocateUniversal(bytes, mySock);//default 2MB alignment. 
-				CHECK(States[i] != NULL) << "Cannot allocate state buffer on numa node " << mySock << ". Too many allocations?";
-			}
-
-			StateLengths[i] = bytes;
-			memset(States[i], 0, bytes);
+			//NUMA Aware.
+			auto mySock = keyDesc.EP.SocketIdx;
+			state = (float*)AlignedAllocateUniversal(bytes, mySock);//default 2MB alignment. 
+			CHECK(state != NULL) << "Cannot allocate state buffer on numa node " << mySock << ". Too many allocations?";
 		}
-		OptimizationCounts.resize(keySizes.size());
+
+		StateLength = bytes;
+		memset(state, 0, bytes);
 	}
 
 	virtual ~Optimizer() { }
 
-	std::vector<__m128> WeightDecays; //weight decay
-	std::vector<__m128> NegationOfLearningRates;
-	std::vector<float*> States; // key -> expanded vectors of momentum.
-	std::vector<size_t> StateLengths;
+	__m128 WeightDecay; //weight decay
+	__m128 NegationOfLearningRate;
+	float* state; // key -> expanded vectors of momentum.
+	size_t StateLength;
 	__m128 MomentumConstant;//the expanded momentum vectors.
 	__m128 GradRescaling;
 	size_t NumberOfUpdates = 0;
 	size_t MachineCount;
 	std::string Name;
-	std::vector<size_t> OptimizationCounts;
+	size_t OptimizationCounts;
 	//clipping, lr scheduler, idx2Name ignored.
-
+	PHubKey Key;
 	const size_t prefetch_distance;
 };
 
 class NAGTTOptimizer : public Optimizer
 {
 public:
-	NAGTTOptimizer(size_t numMachines, std::unordered_map<int, int>& keySizes, const size_t prefetch_distance, vector<KeyDesc>& verbs)
-		: Optimizer(numMachines, keySizes, prefetch_distance, verbs)
+	NAGTTOptimizer(size_t numMachines, PHubKey key, size_t len, const size_t prefetch_distance, KeyDesc& keyDesc)
+		: Optimizer(numMachines, key, len, prefetch_distance, keyDesc)
 	{
 		this->Name = "nagTT";
 	}
 
 	//index, weights and gradients (aggregated) 
-	virtual void Update(size_t index, float* weightBuffer, float* gradBuffer, size_t bufferLen) override
+	virtual void Update(PHubKey key, float* weightBuffer, float* gradBuffer, size_t bufferLen) override
 	{
-		CHECK(index < States.size());
-		//CHECK(bufferLen * sizeof(float) == StateLengths[index]);
-
+		//sanity check
+		CHECK(key == Key);
 		size_t offset = 0;
 		size_t prefetch_offset = prefetch_distance;
 
-		float * momBuffer = States[index];
+		float * momBuffer = state;
 
 		__asm__ __volatile__(/* last_update = update; */
 							  /* update = momentum * update - learning_rate * deltas; */
@@ -250,10 +226,10 @@ public:
 			[mom]    "r" (momBuffer),
 			[weight] "r" (weightBuffer),
 
-			[learning_rate] "m" (NegationOfLearningRates[index]),
+			[learning_rate] "m" (NegationOfLearningRate),
 			[momentum_factor] "m" (MomentumConstant),
 			[scaling_factor] "m" (GradRescaling),
-			[weight_decay_factor] "m" (WeightDecays[index]),
+			[weight_decay_factor] "m" (WeightDecay),
 
 			[inc] "i" (CACHELINE_SIZE_BYTES),
 
@@ -267,31 +243,6 @@ public:
 
 	}
 };
-
-inline Optimizer* Optimizer::Create(std::string name, size_t numMachines, std::unordered_map<int, int>& keySizes, const size_t prefetch_distance, vector<KeyDesc>& verbs)
-{
-	for (auto & c : name) c = tolower(c);
-	if (name == "nagtt" || name == "")
-	{
-		return new NAGTTOptimizer(numMachines, keySizes, prefetch_distance, verbs);
-	}
-	else
-	{
-		assert(false);
-	}
-}
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 class Aggregator;
@@ -370,20 +321,6 @@ public:
 	}
 };
 
-inline Aggregator* Aggregator::Create(std::string name, const size_t prefetch_dist = 0x240)
-{
-	for (auto & c : name) c = tolower(c);
-	if (name == "tt" || name == "")
-	{
-		return new TTAggregator();
-	}
-	else
-	{
-		assert(false);
-	}
-}
-
-
 template <class T>
 class PHubOptimizer : IOperator
 {
@@ -391,11 +328,22 @@ public:
 	shared_ptr<NAGTTOptimizer> opt;
 	size_t numAggregated = -1;
 	//PHubAllocator* allocator;
+	shared_ptr<vector<KeyDesc>> pKeyDescs;
+	PHubKey targetKey;
+	T* weight;
+	T* grad;
+	size_t len;
 	virtual void Initialize(OperatorContext* context) override
 	{
 		CHECK(context->typeCode == OperatorContext::LocallyAvailable);
 		CHECK(numAggregated > 0);
-		opt = make_shared<NAGTTOptimizer>(numAggregated, PHubAllocator::INSTANCE, 0x240,);
+		CHECK(pKeyDescs != NULL);
+		opt = make_shared<NAGTTOptimizer>(numAggregated, PHubAllocator::INSTANCE, 0x240, pKeyDescs);
+
+	}
+	virtual void Run()
+	{
+		opt->Update(targetKey, weight, grad, len);
 	}
 };
 

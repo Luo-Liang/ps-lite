@@ -72,7 +72,7 @@ class PHub
 	};
 	Schedule schedule;
 	vector<NodeId> remotes;
-
+	shared_ptr<vector<KeyDesc>> pKeyDescs;
 public:
 	unordered_map<NodeId, string> nodeMap;
 	MachineConfigDescriptor machineConfig;
@@ -90,4 +90,9 @@ public:
 	void InitializeDevice();
 	int Push(NodeId destination, BufferHandle buf);
 	void InitializeDeviceSpecifics();
+	void InitializePHubSpecifics();
+	shared_ptr<vector<KeyDesc>> RetrieveKeyDescs()
+	{
+		return pKeyDescs;
+	}
 };

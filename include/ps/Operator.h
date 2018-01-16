@@ -4,6 +4,10 @@
 #include <gloo/algorithm.h>
 #include <gloo/allreduce_halving_doubling.h>
 
+template <class T>
+class PHubOptimizer;
+class PHubBroadcast;
+
 typedef int OperatorHandle;
 using namespace std;
 enum OperatorType
@@ -41,7 +45,7 @@ public:
 		//check each inpuit lens is identical.
 		CHECK(pctx->inputAddrs.size() > 0);
 		CHECK(pctx->inputAddrs.size() == pctx.inputLens.size());
-		CHECK(std::adjacent_find(pctx->inputLens.begin(), pctx->inputLens.end(), std::not_equal_to<int>()) == pctx->inputLens.end()) << "lens of elements are different!";
+		//CHECK(std::adjacent_find(pctx->inputLens.begin(), pctx->inputLens.end(), std::not_equal_to<int>()) == pctx->inputLens.end()) << "lens of elements are different!";
 	}
 
 	virtual OperatorHandle Run() override
@@ -74,6 +78,4 @@ public:
 		reducer = make_shared<gloo::AllreduceRingChunked<T>>((gloo::Context*)pctx->additionalContext, pctx->inputAddrs, pctx->inputLens.at(0));
 	}
 };
-
-template <class T>
-class PHubOptimizer;
+ 
