@@ -43,6 +43,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\PHub.cc" />
+    <ClCompile Include="..\..\src\PHubBroadcast.cpp" />
     <ClCompile Include="..\..\src\postoffice.cc" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

@@ -50,4 +50,8 @@ public:
 		}
 	}
 
+	void PushMachineConfig(NodeId myId, MachineConfigDescriptor config)
+	{
+
+	}
 };
