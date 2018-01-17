@@ -33,10 +33,10 @@ public:
 		GradRescaling = _mm_set1_ps(gradScale);
 		printf("[note][PHUB] setting mom = %f, gradrescale = %f and learning rate and weight decays.\n", mom, learningRate]);
 	}
-	virtual void Update(PHubKey key, float* weightBuffer, float* gradBuffer, size_t bufferLen) {}
+	virtual void Update(PLinkKey key, float* weightBuffer, float* gradBuffer, size_t bufferLen) {}
 
 protected:
-	Optimizer(size_t numMachines, PHubKey key, size_t len, const size_t prefetch_distance, KeyDesc& keyDesc)
+	Optimizer(size_t numMachines, PLinkKey key, size_t len, const size_t prefetch_distance, KeyDesc& keyDesc)
 		: prefetch_distance(prefetch_distance)
 	{
 		Key = key;
@@ -90,21 +90,21 @@ protected:
 	std::string Name;
 	size_t OptimizationCounts;
 	//clipping, lr scheduler, idx2Name ignored.
-	PHubKey Key;
+	PLinkKey Key;
 	const size_t prefetch_distance;
 };
 
 class NAGTTOptimizer : public Optimizer
 {
 public:
-	NAGTTOptimizer(size_t numMachines, PHubKey key, size_t len, const size_t prefetch_distance, KeyDesc& keyDesc)
+	NAGTTOptimizer(size_t numMachines, PLinkKey key, size_t len, const size_t prefetch_distance, KeyDesc& keyDesc)
 		: Optimizer(numMachines, key, len, prefetch_distance, keyDesc)
 	{
 		this->Name = "nagTT";
 	}
 
 	//index, weights and gradients (aggregated) 
-	virtual void Update(PHubKey key, float* weightBuffer, float* gradBuffer, size_t bufferLen) override
+	virtual void Update(PLinkKey key, float* weightBuffer, float* gradBuffer, size_t bufferLen) override
 	{
 		//sanity check
 		CHECK(key == Key);
@@ -329,7 +329,7 @@ public:
 	size_t numAggregated = -1;
 	//PHubAllocator* allocator;
 	shared_ptr<vector<KeyDesc>> pKeyDescs;
-	PHubKey targetKey;
+	PLinkKey targetKey;
 	T* weight;
 	T* grad;
 	size_t len;
