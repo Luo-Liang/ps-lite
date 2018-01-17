@@ -7,6 +7,7 @@
 
 PHub::PHub(Schedule operations, string redezvousUri,
 	unordered_map<NodeId, string> nodeToIP,
+	unordered_map<PLinkKey, size_t>& size,
 	NodeId id)
 {
 	schedule = operations;
@@ -15,6 +16,7 @@ PHub::PHub(Schedule operations, string redezvousUri,
 	ID = id;
 	RendezvousUri = redezvousUri;
 	pKeyDescs = make_shared<vector<KeyDesc>>();
+	keySizes = size;
 }
 
 void PHub::InitializeDevice()
@@ -175,6 +177,10 @@ void PHub::InitializeDevice()
 
 void PHub::InitializePHubSpecifics()
 {
+	//use 1 QP per connection.
+	//how many remotes are there?
+	vector<NodeId> remotes;
+	//??????????
 
 }
 

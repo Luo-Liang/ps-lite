@@ -4,7 +4,9 @@
 #include <memory>
 #include "phub.h"
 #include <unistd.h>
+#include <json.hpp>
 using namespace std;
+using json = nlohmann::json;
 class Rendezvous
 {
 	string IP;
@@ -52,6 +54,12 @@ public:
 
 	void PushMachineConfig(NodeId myId, MachineConfigDescriptor config)
 	{
+		json j;
+		j[""]
+	}
 
+	MachineConfigDescriptor PullMachineConfig(NodeId myId)
+	{
+		
 	}
 };

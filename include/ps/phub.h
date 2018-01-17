@@ -69,6 +69,14 @@ struct MachineConfigDescriptor
 	std::vector<ibv_mr*> ib_DeviceMemoryRegions;
 };
 
+struct MachineConfigDescSlim
+{
+public:
+	int NumSockets;
+	std::vector<int> DevicesAtSocket;
+	std::vector<int> CoresAtSocket;
+};
+
 class PHub
 {
 	
