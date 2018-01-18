@@ -52,14 +52,26 @@ public:
 		}
 	}
 
-	void PushMachineConfig(NodeId myId, MachineConfigDescriptor config)
+	void PushMachineConfig(NodeId myId, MachineConfigDescriptor& config)
 	{
 		json j;
-		j[""]
+		j["sockets"] = config.SocketCount;
+		j["core2socket"] = config.Core2SocketIdx;
+		j["ibdevice2socket"] = config.ib_Device2SocketIdx;
+		var reply = redisCommand(pContext, "SET mcds%d %s", myId,j.dump().c_str());
+		CHECK(reply) << pContext->errstr;
 	}
 
-	MachineConfigDescriptor PullMachineConfig(NodeId myId)
+	MachineConfigDescSlim PullMachineConfig(NodeId myId)
 	{
-		
+		var reply = redisCommand(pContext, "GET mcds%d", myId);
+		CHECK(reply) << pContext->errstr;
+		var pRep = (redisReply*)reply;
+		var j = json::parse(pRep->str);
+		MachineConfigDescSlim mcds;
+		mcds.Cores2Socket = j["core2socket"].get<vector<int>>();
+		mcds.Devices2Socket = j["ibdevice2socket"].get<vector<int>>();
+		mcds.NumSockets = j["sockets"].get<int>();
+		return mcds;
 	}
 };

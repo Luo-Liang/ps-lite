@@ -171,16 +171,19 @@ void PHub::InitializeDevice()
 		CHECK(machineConfig.ib_protection_domains.size() == machineConfig.ib_Device2SocketIdx.size());
 	}
 	machineConfig.Initialized = true;
+	phubRendezvous->PushMachineConfig(ID, machineConfig);
 	//add more code to support non-IB cards.
 	//not for now
 }
 
+//i only care about nodes i communicate with
 void PHub::InitializePHubSpecifics()
 {
 	//use 1 QP per connection.
 	//how many remotes are there?
 	vector<NodeId> remotes;
 	//??????????
+
 
 }
 

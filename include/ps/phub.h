@@ -73,8 +73,8 @@ struct MachineConfigDescSlim
 {
 public:
 	int NumSockets;
-	std::vector<int> DevicesAtSocket;
-	std::vector<int> CoresAtSocket;
+	std::vector<int> Devices2Socket;
+	std::vector<int> Cores2Socket;
 };
 
 class PHub
