@@ -181,8 +181,62 @@ void PHub::InitializePHubSpecifics()
 {
 	//use 1 QP per connection.
 	//how many remotes are there?
-	vector<NodeId> remotes;
 	//??????????
+	//who am i talking to?
+	vector<MachineConfigDescSlim> descs;
+	unordered_map<NodeId, vector<vector<int>>> remoteSockQPIdxs;
+	int totalQPCnt = 0;
+	for (var item : nodeMap)
+	{
+		if (ID != item.first)
+		{
+			var mcfg = phubRendezvous->PullMachineConfig(item.first);
+			var& vec = remoteSockQPIdxs[item.first];
+			vec.resize(mcfg.NumSockets);
+			for (Cntr card = 0; card < mcfg.Devices2Socket.size(); card++)
+			{
+				vec.at(mcfg.Devices2Socket.at(card)).push_back(totalQPCnt++);
+			}
+		}
+	}
+
+	//now i need to distribute keys equally to these QPs.
+	vector<PLinkKey> keys;
+	vector<float> kSizes;
+	for (var item : keySizes)
+	{
+		keys.push_back(item.first);
+		kSizes.push_back((float)item.second);
+	}
+	vector<int> key2QP = approximateSetPartition(kSizes, totalQPCnt);
+
+	//there maybe more QP than there are devices on local machine.
+	//assign QP to devices.
+	vector<float> qpPayloadSizes;
+	qpPayloadSizes.resize(totalQPCnt);
+	for (Cntr i = 0; i < key2QP.size(); i++)
+	{
+		var key = keys.at(i);
+		var qp = key2QP.at(i);
+		qpPayloadSizes.at(qp) += keySizes.at(key);
+	}
+
+	//assign qp to devices.
+	vector<int> qp2Dev = approximateSetPartition(qpPayloadSizes, machineConfig.ib_device_names.size());
+
+
+	//assign qp to cores.
+
+	//how to partition qps to cq?
+	//balance cq load.
+	//load balance qp to cq (core).
+
+	for (Cntr i = 0; i < qp2Dev.size(); i++)
+	{
+		var dev = qp2Dev.at(i);
+		var socket = machineConfig.ib_Device2SocketIdx.at(dev);
+
+	}
 
 
 }
