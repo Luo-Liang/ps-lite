@@ -65,8 +65,13 @@ struct MachineConfigDescriptor
 	int SocketCount = 0;
 	int CoreCount = 0;
 	std::vector<int> Core2SocketIdx;
-	std::vector<int> Socket2CoreIdx;
+	std::vector<int> Socket2CoreCount;
 	std::vector<ibv_mr*> ib_DeviceMemoryRegions;
+	std::vector<vector<int>> Socket2Core;
+
+	std::vector<ibv_qp*> QPs;
+	std::vector<ibv_cq*> SCQs;
+	std::vector<ibv_cq*> RCQs;
 };
 
 struct MachineConfigDescSlim

@@ -58,18 +58,19 @@ void PHub::InitializeDevice()
 	{
 		phubCoreAssignmentScheme = "sequential";
 	}
-	machineConfig.Socket2CoreIdx.resize(machineConfig.SocketCount);
+	machineConfig.Socket2Core.resize(machineConfig.SocketCount);
 	for (int i = 0; i < machineConfig.CoreCount; i++)
 	{
 		if (strcmp(phubCoreAssignmentScheme, "sequential") == 0)
 		{
 			machineConfig.Core2SocketIdx.push_back(machineConfig.SocketCount * i / machineConfig.CoreCount);
-			machineConfig.Socket2CoreIdx.at(machineConfig.SocketCount * i / machineConfig.CoreCount)++;
+			machineConfig.Socket2Core.at(machineConfig.SocketCount * i / machineConfig.CoreCount).push_back(i);
+
 		}
 		else if (strcmp(phubCoreAssignmentScheme, "roundrobin") == 0)
 		{
 			machineConfig.Core2SocketIdx.push_back(i %  machineConfig.SocketCount);
-			machineConfig.Socket2CoreIdx.at(i %  machineConfig.SocketCount)++;
+			machineConfig.Socket2Core.at(i %  machineConfig.SocketCount).push_back(i);
 		}
 		else
 		{
@@ -184,18 +185,26 @@ void PHub::InitializePHubSpecifics()
 	//??????????
 	//who am i talking to?
 	vector<MachineConfigDescSlim> descs;
-	unordered_map<NodeId, vector<vector<int>>> remoteSockQPIdxs;
+	//unordered_map<NodeId, vector<vector<int>>> remoteSockQPIdxs;
+	unordered_map<int, NodeId> qp2RemoteIdx;
+	unordered_map<int, int> qp2RemoteDevIdx;
 	int totalQPCnt = 0;
+
 	for (var item : nodeMap)
 	{
 		if (ID != item.first)
 		{
 			var mcfg = phubRendezvous->PullMachineConfig(item.first);
-			var& vec = remoteSockQPIdxs[item.first];
+			//var& vec = remoteSockQPIdxs[item.first];
 			vec.resize(mcfg.NumSockets);
 			for (Cntr card = 0; card < mcfg.Devices2Socket.size(); card++)
 			{
-				vec.at(mcfg.Devices2Socket.at(card)).push_back(totalQPCnt++);
+				//one qp connection per card.
+				qp2RemoteIdx[totalQPCnt] = item.first;
+				qp2RemoteDevIdx[totalQPCnt] = card;
+				vec.at(mcfg.Devices2Socket.at(card)).push_back(totalQPCnt);
+				totalQPCnt++;
+				CHECK(qp2RemoteIdx.size() == totalQPCnt);
 			}
 		}
 	}
@@ -209,7 +218,6 @@ void PHub::InitializePHubSpecifics()
 		kSizes.push_back((float)item.second);
 	}
 	vector<int> key2QP = approximateSetPartition(kSizes, totalQPCnt);
-
 	//there maybe more QP than there are devices on local machine.
 	//assign QP to devices.
 	vector<float> qpPayloadSizes;
@@ -223,7 +231,7 @@ void PHub::InitializePHubSpecifics()
 
 	//assign qp to devices.
 	vector<int> qp2Dev = approximateSetPartition(qpPayloadSizes, machineConfig.ib_device_names.size());
-
+	CHECK(qp2Dev.size() == totalQPCnt);
 
 	//assign qp to cores.
 
@@ -231,14 +239,65 @@ void PHub::InitializePHubSpecifics()
 	//balance cq load.
 	//load balance qp to cq (core).
 
-	for (Cntr i = 0; i < qp2Dev.size(); i++)
+	//there may be fewer cores than interfaces.
+	//the minimum number of interfaces is the number of cards involved and the number of created q pairs.
+	vector<int> qp2cq;
+	int cqCnt = min(totalQPCnt, machineConfig.ib_num_devices);
+
+	//create one CQ per device.
+	for (Cntr i = 0; i < totalQPCnt; i++)
 	{
 		var dev = qp2Dev.at(i);
-		var socket = machineConfig.ib_Device2SocketIdx.at(dev);
+		qp2cq.push_back(dev);
+	}
+
+	//map cq to cores.
+	vector<int> cq2Cores;
+	cq2Cores.resize(cqCnt);
+	vector<int> socketTicketer(machineConfig.SocketCount);
+	for (Cntr i = 0; i < cqCnt; i++)
+	{
+		//what's my socket?
+		//just device i.
+		var socket = machineConfig.ib_Device2SocketIdx.at(i);
+		int& currentIdx = socketTicketer.at(socket);
+		var core = machineConfig.Socket2Core.at(socket).at(currentIdx);
+		currentIdx++;
+		cq2Cores.at(i) = core;
+	}
+
+	//we now have a mapping of how qps map to devices and cores.
+	//we need to broadcast this information.
+	//first, create CQs.
+	const var CQDepth = 8192;
+	for (Cntr i = 0; i < cqCnt; i++)
+	{
+		var dev = i;
+		var pSCQ = ibv_create_cq(machineConfig.ib_contexts.at(dev), CQDepth, NULL, NULL, 0);
+		CHECK(pSCQ != NULL);
+		SCQs.push_back(pSCQ);
+		var pRCQ = 
 
 	}
 
 
+	//first, create these queue pairs.
+	for (Cntr i = 0; i < totalQPCnt; i++)
+	{
+		var dev = qp2Dev.at(i);
+		var pPD = machineConfig.ib_protection_domains.at(dev);
+		ibv_qp_init_attr init_attributes;
+		std::memset(&init_attributes, 0, sizeof(ibv_qp_init_attr));
+
+	}
+
+
+	//foreach device, broadcast the map to different endpoint's different devices.
+	for (Cntr i = 0; i < machineConfig.ib_num_devices; i++)
+	{
+
+		//foreach remote device, tell me what is my queue pair number?
+	}
 }
 
 void PHub::InitializeDeviceSpecifics()
@@ -273,41 +332,41 @@ void PHub::InitializeDeviceSpecifics()
 		std::sort(pctx->outputs.begin(), pctx->outputs.end());
 		switch (op->Type)
 		{
-			case GlooCollectiveAlgorithm:
-			{
-				//here we need to initialize lots of gloo contexts.
-				//how many people i need to synchronize with?
-				//first, check inputs and outputs are the same.
-				//collectives only synchronize to the same nodes.
+		case GlooCollectiveAlgorithm:
+		{
+			//here we need to initialize lots of gloo contexts.
+			//how many people i need to synchronize with?
+			//first, check inputs and outputs are the same.
+			//collectives only synchronize to the same nodes.
 
-				//am I in this step?
-				//gloo expects different ranks than us.
-				CHECK(pctx->inputs.size() == pctx->outputs.size());
-				CHECK(pctx->inputs == pctx->outputs);
-				//check input lens are identical, for gloo.
-				CHECK(pctx->typeCode == OperatorContext::OperatorContextTypeCode::LocallyAvailable);
-				//figure out who are the nodes.
-				vector<NodeId> nodes;
-				for (auto handle : pctx->inputs)
-				{
-					//inputs to gloo must be all local
-					CHECK(NodeIdFromHandle(handle) == ID);
-					nodes.push_back(NodeIdFromHandle(handle));
-				}
-				std::sort(nodes.begin(), nodes.end());
-				auto idx = CxxxxBinarySearch(nodes.begin(), nodes.end(), ID);
-				//figure out what keys are needed locally?
-				//these keys are in inputs.
-				std::shared_ptr<gloo::rendezvous::Context> pContext = std::make_shared<gloo::rendezvous::Context>(idx, pctx->inputs.size());
-				pctx->additionalContext = pContext;
-				//attempt to connect to this mesh
-				pContext->connectFullMesh(*pRedisStore, pGlooDefaultDevice);
-				//create this context.
-			}
-			default:
+			//am I in this step?
+			//gloo expects different ranks than us.
+			CHECK(pctx->inputs.size() == pctx->outputs.size());
+			CHECK(pctx->inputs == pctx->outputs);
+			//check input lens are identical, for gloo.
+			CHECK(pctx->typeCode == OperatorContext::OperatorContextTypeCode::LocallyAvailable);
+			//figure out who are the nodes.
+			vector<NodeId> nodes;
+			for (auto handle : pctx->inputs)
 			{
-				CHECK(false) << " Not implemented.";
+				//inputs to gloo must be all local
+				CHECK(NodeIdFromHandle(handle) == ID);
+				nodes.push_back(NodeIdFromHandle(handle));
 			}
+			std::sort(nodes.begin(), nodes.end());
+			auto idx = CxxxxBinarySearch(nodes.begin(), nodes.end(), ID);
+			//figure out what keys are needed locally?
+			//these keys are in inputs.
+			std::shared_ptr<gloo::rendezvous::Context> pContext = std::make_shared<gloo::rendezvous::Context>(idx, pctx->inputs.size());
+			pctx->additionalContext = pContext;
+			//attempt to connect to this mesh
+			pContext->connectFullMesh(*pRedisStore, pGlooDefaultDevice);
+			//create this context.
+		}
+		default:
+		{
+			CHECK(false) << " Not implemented.";
+		}
 		}
 
 
