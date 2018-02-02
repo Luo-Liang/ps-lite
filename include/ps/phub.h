@@ -69,9 +69,7 @@ struct MachineConfigDescriptor
 	std::vector<ibv_mr*> ib_DeviceMemoryRegions;
 	std::vector<vector<int>> Socket2Core;
 
-	std::vector<ibv_qp*> QPs;
-	std::vector<ibv_cq*> SCQs;
-	std::vector<ibv_cq*> RCQs;
+	
 };
 
 struct MachineConfigDescSlim
@@ -88,6 +86,9 @@ class PHub
 	Schedule schedule;
 	vector<NodeId> remotes;
 	shared_ptr<vector<KeyDesc>> pKeyDescs;
+	std::vector<ibv_qp*> QPs;
+	std::vector<ibv_cq*> SCQs;
+	std::vector<ibv_cq*> RCQs;
 public:
 	unordered_map<PLinkKey, size_t> keySizes;
 	unordered_map<NodeId, string> nodeMap;

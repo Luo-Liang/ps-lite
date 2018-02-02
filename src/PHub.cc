@@ -196,13 +196,13 @@ void PHub::InitializePHubSpecifics()
 		{
 			var mcfg = phubRendezvous->PullMachineConfig(item.first);
 			//var& vec = remoteSockQPIdxs[item.first];
-			vec.resize(mcfg.NumSockets);
+			//vec.resize(mcfg.NumSockets);
 			for (Cntr card = 0; card < mcfg.Devices2Socket.size(); card++)
 			{
 				//one qp connection per card.
 				qp2RemoteIdx[totalQPCnt] = item.first;
 				qp2RemoteDevIdx[totalQPCnt] = card;
-				vec.at(mcfg.Devices2Socket.at(card)).push_back(totalQPCnt);
+				//vec.at(mcfg.Devices2Socket.at(card)).push_back(totalQPCnt);
 				totalQPCnt++;
 				CHECK(qp2RemoteIdx.size() == totalQPCnt);
 			}
@@ -270,14 +270,17 @@ void PHub::InitializePHubSpecifics()
 	//we need to broadcast this information.
 	//first, create CQs.
 	const var CQDepth = 8192;
+	const var SGElement = 2;
+	const var MaxInlineData = 16;
 	for (Cntr i = 0; i < cqCnt; i++)
 	{
 		var dev = i;
 		var pSCQ = ibv_create_cq(machineConfig.ib_contexts.at(dev), CQDepth, NULL, NULL, 0);
 		CHECK(pSCQ != NULL);
 		SCQs.push_back(pSCQ);
-		var pRCQ = 
-
+		var pRCQ = ibv_create_cq(machineConfig.ib_contexts.at(dev), CQDepth, NULL, NULL, 0);
+		CHECK(pRCQ != NULL);
+		RCQs.push_back(pRCQ);
 	}
 
 
@@ -288,14 +291,43 @@ void PHub::InitializePHubSpecifics()
 		var pPD = machineConfig.ib_protection_domains.at(dev);
 		ibv_qp_init_attr init_attributes;
 		std::memset(&init_attributes, 0, sizeof(ibv_qp_init_attr));
-
+		var cqIdx = qp2cq.at(i);
+		init_attributes.send_cq = SCQs.at(cqIdx);
+		init_attributes.recv_cq = RCQs.at(cqIdx);
+		CHECK(cqIdx == dev) << "Cannot create cq on a wrong device";
+		init_attributes.qp_type = IBV_QPT_RC;
+		//no signal
+		init_attributes.sq_sig_all = 0;
+		init_attributes.cap.max_send_wr = CQDepth;
+		init_attributes.cap.max_recv_wr = CQDepth;
+		init_attributes.cap.max_send_sge = SGElement;
+		init_attributes.cap.max_recv_sge = SGElement;
+		init_attributes.cap.max_inline_data = MaxInlineData;
+		//now create queue pairs.
+		var pQP = ibv_create_qp(pPD, &init_attributes);
+		CHECK(pQP != NULL);
+		QPs.push_back(pQP);
 	}
 
 
 	//foreach device, broadcast the map to different endpoint's different devices.
 	for (Cntr i = 0; i < machineConfig.ib_num_devices; i++)
 	{
-
+		//create a dictionary for broadcast.
+		var myKey = CxxxxStringFormat("%d:%d", ID, i);
+		unordered_map<string, int> bcast;
+		//pick out my talks.
+		for (Cntr id = 0; id < totalQPCnt; id++)
+		{
+			var qpRemote = qp2RemoteIdx.at(id);
+			var qpDevId = qp2RemoteDevIdx.at(id);
+			if (qpDevId == i)
+			{
+				var remoteName = CxxxxStringFormat("%d:%d", qpRemote, qpDevId);
+				bcast[remoteName] = QPs.at(id)->qp_num;
+			}
+		}
+		phubRendezvous->PullQP();
 		//foreach remote device, tell me what is my queue pair number?
 	}
 }
@@ -332,41 +364,41 @@ void PHub::InitializeDeviceSpecifics()
 		std::sort(pctx->outputs.begin(), pctx->outputs.end());
 		switch (op->Type)
 		{
-		case GlooCollectiveAlgorithm:
-		{
-			//here we need to initialize lots of gloo contexts.
-			//how many people i need to synchronize with?
-			//first, check inputs and outputs are the same.
-			//collectives only synchronize to the same nodes.
-
-			//am I in this step?
-			//gloo expects different ranks than us.
-			CHECK(pctx->inputs.size() == pctx->outputs.size());
-			CHECK(pctx->inputs == pctx->outputs);
-			//check input lens are identical, for gloo.
-			CHECK(pctx->typeCode == OperatorContext::OperatorContextTypeCode::LocallyAvailable);
-			//figure out who are the nodes.
-			vector<NodeId> nodes;
-			for (auto handle : pctx->inputs)
+			case GlooCollectiveAlgorithm:
 			{
-				//inputs to gloo must be all local
-				CHECK(NodeIdFromHandle(handle) == ID);
-				nodes.push_back(NodeIdFromHandle(handle));
+				//here we need to initialize lots of gloo contexts.
+				//how many people i need to synchronize with?
+				//first, check inputs and outputs are the same.
+				//collectives only synchronize to the same nodes.
+
+				//am I in this step?
+				//gloo expects different ranks than us.
+				CHECK(pctx->inputs.size() == pctx->outputs.size());
+				CHECK(pctx->inputs == pctx->outputs);
+				//check input lens are identical, for gloo.
+				CHECK(pctx->typeCode == OperatorContext::OperatorContextTypeCode::LocallyAvailable);
+				//figure out who are the nodes.
+				vector<NodeId> nodes;
+				for (auto handle : pctx->inputs)
+				{
+					//inputs to gloo must be all local
+					CHECK(NodeIdFromHandle(handle) == ID);
+					nodes.push_back(NodeIdFromHandle(handle));
+				}
+				std::sort(nodes.begin(), nodes.end());
+				auto idx = CxxxxBinarySearch(nodes.begin(), nodes.end(), ID);
+				//figure out what keys are needed locally?
+				//these keys are in inputs.
+				std::shared_ptr<gloo::rendezvous::Context> pContext = std::make_shared<gloo::rendezvous::Context>(idx, pctx->inputs.size());
+				pctx->additionalContext = pContext;
+				//attempt to connect to this mesh
+				pContext->connectFullMesh(*pRedisStore, pGlooDefaultDevice);
+				//create this context.
 			}
-			std::sort(nodes.begin(), nodes.end());
-			auto idx = CxxxxBinarySearch(nodes.begin(), nodes.end(), ID);
-			//figure out what keys are needed locally?
-			//these keys are in inputs.
-			std::shared_ptr<gloo::rendezvous::Context> pContext = std::make_shared<gloo::rendezvous::Context>(idx, pctx->inputs.size());
-			pctx->additionalContext = pContext;
-			//attempt to connect to this mesh
-			pContext->connectFullMesh(*pRedisStore, pGlooDefaultDevice);
-			//create this context.
-		}
-		default:
-		{
-			CHECK(false) << " Not implemented.";
-		}
+			default:
+			{
+				CHECK(false) << " Not implemented.";
+			}
 		}
 
 

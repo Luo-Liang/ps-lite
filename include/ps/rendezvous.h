@@ -74,4 +74,22 @@ public:
 		mcds.NumSockets = j["sockets"].get<int>();
 		return mcds;
 	}
+
+	void PushQP(string cardId, unordered_map<string, int>& map)
+	{
+		json m(map);
+		var j = m.dump();
+		var reply = redisCommand(pContext, "SET %s %s", cardId.c_str(), j.c_str());
+		CHECK(reply) << pContext->errstr;
+	}
+
+	unordered_map<string, int> PullQP(string cardId)
+	{
+		var reply = redisCommand(pContext, "GET %s", cardId.c_str());
+		CHECK(reply) << pContext->errstr;
+		var pRep = (redisReply*)reply;
+		var j = json::parse(pRep->str);
+		unordered_map<string, int> r = j;
+		return r;
+	}
 };
