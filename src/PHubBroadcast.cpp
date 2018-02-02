@@ -18,55 +18,6 @@ public:
 	NodeId MyID;
 	virtual void Initialize(OperatorContext* context) override
 	{
-		CHECK(pPhub != NULL);
-		CHECK(context->typeCode == OperatorContext::General);
-		//CHECK(std::adjacent_find(pctx->inputLens.begin(), pctx->inputLens.end(), std::not_equal_to<int>()) == pctx->inputLens.end()) << "lens of elements are different!";
-		//im i a receiver or a sender
-		for (var buffer : context->inputs)
-		{
-			var node = NodeIdFromHandle(buffer);
-			if (node == MyID)
-			{
-				isReceiver = false;
-				break;
-			}
-		}
-
-		//i need to determine the fastest way to finish this operator,
-		//creating new QPs nad stuff.
-		std::vector<NodeId> remotes = CxxxxSelect<NodeId, BufferHandle>(
-			isReceiver ? context->inputs : context->outputs,
-			[](BufferHandle handle)
-		{
-			return NodeIdFromHandle(handle);
-		});
-
-		var qpCount = remotes.size();
-		var keys = CxxxxSelect<PLinkKey, BufferHandle>(
-			isReceiver ? context->inputs : context->outputs,
-			[](BufferHandle handle)
-		{
-			return KeyFromHandle(handle);
-		});
-
-		CHECK(keys.size() > 0);
-		CHECK(AllEqual<PLinkKey>(keys));
-		key = keys.at(0);
-
-		//size in Bytes
-		keySize = pPhub->keySizes.at(key);
-
-		//distribute key to qps.
-		qpSizes.resize(qpCount);
-		qpIdx2KeysIdx.resize(qpCount);
-
-		for (Cntr i = 0; i < keys.size(); i++)
-		{
-			var qp = key2QPIdx.at(i);
-			qpSizes.at(i) += kSizes.at(i);
-			qpIdx2KeysIdx.at(qp).push_back(i);
-		}
-
 
 	}
 
