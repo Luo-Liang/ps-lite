@@ -8,8 +8,10 @@
 PHub::PHub(Schedule operations, string redezvousUri,
 	unordered_map<NodeId, string> nodeToIP,
 	unordered_map<PLinkKey, size_t>& size,
+	int totalParticipant,
 	NodeId id)
 {
+	totalPHubNodes = totalParticipant;
 	schedule = operations;
 	nodeMap = nodeToIP;
 	//now connect that.
@@ -184,7 +186,7 @@ void PHub::InitializePHubSpecifics()
 	//how many remotes are there?
 	//??????????
 	//who am i talking to?
-	vector<MachineConfigDescSlim> descs;
+	unordered_map<NodeId, MachineConfigDescSlim> descs;
 	//unordered_map<NodeId, vector<vector<int>>> remoteSockQPIdxs;
 	unordered_map<int, NodeId> qp2RemoteIdx;
 	unordered_map<int, int> qp2RemoteDevIdx;
@@ -195,6 +197,7 @@ void PHub::InitializePHubSpecifics()
 		if (ID != item.first)
 		{
 			var mcfg = phubRendezvous->PullMachineConfig(item.first);
+			descs[item.first] = mcfg;
 			//var& vec = remoteSockQPIdxs[item.first];
 			//vec.resize(mcfg.NumSockets);
 			for (Cntr card = 0; card < mcfg.Devices2Socket.size(); card++)
@@ -208,7 +211,7 @@ void PHub::InitializePHubSpecifics()
 			}
 		}
 	}
-
+	Endpoints.resize(totalQPCnt);
 	//now i need to distribute keys equally to these QPs.
 	vector<PLinkKey> keys;
 	vector<float> kSizes;
@@ -327,9 +330,31 @@ void PHub::InitializePHubSpecifics()
 				bcast[remoteName] = QPs.at(id)->qp_num;
 			}
 		}
-		phubRendezvous->PullQP();
 		//foreach remote device, tell me what is my queue pair number?
 	}
+
+	//rendezvous
+	phubRendezvous->SynchronousBarrier("qp_exchange", totalPHubNodes);
+
+	//pull my connections.
+	//my connections include the stuff in the node map.
+	unordered_map<string, unordered_map<string, int>> cardQPCache;
+	for (var p : nodeMap)
+	{
+		var rNode = p.first;
+		//how many devices in this?
+		var mcfg = descs[rNode];
+		var totalDevs = mcfg.Devices2Socket.size();
+
+		//pull queue pairs.
+		for (Cntr i = 0; i < totalDevs; i++)
+		{
+			var key = CxxxxStringFormat("%d:%d", rNode, i);
+			cardQPCache[key] = phubRendezvous->PullQP(key);
+		}
+	}
+
+	//now assign qp to current qps.
 }
 
 void PHub::InitializeDeviceSpecifics()
@@ -404,7 +429,8 @@ void PHub::InitializeDeviceSpecifics()
 
 		//make sure everyone has executed this step.
 		//barrier
-		phubRendezvous->SynchronousBarrier(op->GetUniqueName(), nodeMap.size());
+		phubRendezvous->SynchronousBarrier(op->GetUniqueName(), totalPHubNodes);
+
 	}
 	//use 1 queue pair for a remote interface.
 

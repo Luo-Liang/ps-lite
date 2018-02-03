@@ -80,6 +80,21 @@ public:
 	std::vector<int> Cores2Socket;
 };
 
+struct PHubEndpoint {
+	uint16_t lid = -1;        // InfiniBand address of node. Remote Lid
+	uint32_t qp_num = -1;     // Queue pair number on node (like IP port number)
+	ibv_qp * queue_pair = NULL;
+	int DeviceIdx = -1;
+	int SocketIdx = -1;
+	int RemoteMachineIdx = -1;
+	int CoreIdx = -1;
+	int RemoteQPIdx = -1;
+	int CQIdx = -1;
+	int Index = -1;
+	uint32_t RemoteKey = 0;
+	uint16_t LocalLid = 0;
+};
+
 class PHub
 {
 	
@@ -89,6 +104,10 @@ class PHub
 	std::vector<ibv_qp*> QPs;
 	std::vector<ibv_cq*> SCQs;
 	std::vector<ibv_cq*> RCQs;
+	int totalPHubNodes;
+	std::vector<PHubEndpoint> Endpoints;
+
+
 public:
 	unordered_map<PLinkKey, size_t> keySizes;
 	unordered_map<NodeId, string> nodeMap;
@@ -97,7 +116,8 @@ public:
 	NodeId ID;
 	PHub(Schedule schedule, string redezvousUri,
 		unordered_map<NodeId,string> nodeToIP,
-		unordered_map<PLinkKey, size_t> size,
+		unordered_map<PLinkKey, size_t>& size,
+		int totalParticipant,
 		NodeId Id);
 	string RendezvousUri;
 	
