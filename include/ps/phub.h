@@ -81,18 +81,17 @@ public:
 };
 
 struct PHubEndpoint {
-	uint16_t lid = -1;        // InfiniBand address of node. Remote Lid
-	uint32_t qp_num = -1;     // Queue pair number on node (like IP port number)
-	ibv_qp * queue_pair = NULL;
+	uint16_t LocalLid = 0;
+	uint16_t RemoteLid = -1;        // InfiniBand address of node. Remote Lid
+	uint32_t RemoteQPNum = -1;     // Queue pair number on node (like IP port number)
+	uint32_t LocalQPNum = -1;
 	int DeviceIdx = -1;
 	int SocketIdx = -1;
 	int RemoteMachineIdx = -1;
+	int RemoteCardIdx = -1;
 	int CoreIdx = -1;
-	int RemoteQPIdx = -1;
 	int CQIdx = -1;
 	int Index = -1;
-	uint32_t RemoteKey = 0;
-	uint16_t LocalLid = 0;
 };
 
 class PHub

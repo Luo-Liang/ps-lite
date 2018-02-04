@@ -252,6 +252,9 @@ void PHub::InitializePHubSpecifics()
 	{
 		var dev = qp2Dev.at(i);
 		qp2cq.push_back(dev);
+		Endpoints.at(i).CQIdx = dev;
+		Endpoints.at(i).DeviceIdx = dev;
+		Endpoints.at(i).SocketIdx = machineConfig.ib_Device2SocketIdx.at(dev);
 	}
 
 	//map cq to cores.
@@ -310,6 +313,15 @@ void PHub::InitializePHubSpecifics()
 		var pQP = ibv_create_qp(pPD, &init_attributes);
 		CHECK(pQP != NULL);
 		QPs.push_back(pQP);
+
+		//at this stage, Endpoint should have core assigned.
+		Endpoints.at(i).CoreIdx = cq2Cores.at(Endpoints.at(i).CQIdx);
+		CHECK(Endpoints.at(i).SocketIdx == machineConfig.Core2SocketIdx.at(Endpoints.at(i).CoreIdx));
+		Endpoints.at(i).Index = i;
+		Endpoints.at(i).RemoteMachineIdx = qp2RemoteIdx.at(i);
+		Endpoints.at(i).RemoteCardIdx = qp2RemoteDevIdx.at(i);
+		Endpoints.at(i).LocalQPNum = pQP->qp_num;
+		Endpoints.at(i).LocalLid = machineConfig.ib_ports_attribute.at(dev).lid;
 	}
 
 
@@ -320,6 +332,7 @@ void PHub::InitializePHubSpecifics()
 		var myKey = CxxxxStringFormat("%d:%d", ID, i);
 		unordered_map<string, int> bcast;
 		//pick out my talks.
+		bcast["lid"] = machineConfig.ib_ports_attribute.at(i).lid;
 		for (Cntr id = 0; id < totalQPCnt; id++)
 		{
 			var qpRemote = qp2RemoteIdx.at(id);
@@ -355,6 +368,25 @@ void PHub::InitializePHubSpecifics()
 	}
 
 	//now assign qp to current qps.
+	for (Cntr i = 0; i < totalQPCnt; i++)
+	{
+		var rNode = qp2RemoteIdx.at(i);
+		var rCard = qp2RemoteDevIdx.at(i);
+
+		var rName = CxxxxStringFormat("%d:%d", rNode, rCard);
+		
+		var mNode = ID;
+		var mCard = qp2Dev.at(i);
+
+		var mName = CxxxxStringFormat("%d:%d", mNode, mCard);
+
+		var& map = cardQPCache.at(rName);
+
+		Endpoints.at(i).RemoteLid = map.at("lid");
+		Endpoints.at(i).RemoteQPNum = map.at(mName);
+	}
+
+
 }
 
 void PHub::InitializeDeviceSpecifics()
