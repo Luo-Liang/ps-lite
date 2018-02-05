@@ -192,26 +192,6 @@ void PHub::InitializePHubSpecifics()
 	unordered_map<int, int> qp2RemoteDevIdx;
 	int totalQPCnt = 0;
 
-	for (var item : nodeMap)
-	{
-		if (ID != item.first)
-		{
-			var mcfg = phubRendezvous->PullMachineConfig(item.first);
-			descs[item.first] = mcfg;
-			//var& vec = remoteSockQPIdxs[item.first];
-			//vec.resize(mcfg.NumSockets);
-			for (Cntr card = 0; card < mcfg.Devices2Socket.size(); card++)
-			{
-				//one qp connection per card.
-				qp2RemoteIdx[totalQPCnt] = item.first;
-				qp2RemoteDevIdx[totalQPCnt] = card;
-				//vec.at(mcfg.Devices2Socket.at(card)).push_back(totalQPCnt);
-				totalQPCnt++;
-				CHECK(qp2RemoteIdx.size() == totalQPCnt);
-			}
-		}
-	}
-	Endpoints.resize(totalQPCnt);
 	//now i need to distribute keys equally to these QPs.
 	vector<PLinkKey> keys;
 	vector<float> kSizes;
@@ -220,11 +200,36 @@ void PHub::InitializePHubSpecifics()
 		keys.push_back(item.first);
 		kSizes.push_back((float)item.second);
 	}
-	vector<int> key2QP = approximateSetPartition(kSizes, totalQPCnt);
+	vector<float> qpPayloadSizes;
+	for (var item : nodeMap)
+	{
+		if (ID != item.first)
+		{
+			var mcfg = phubRendezvous->PullMachineConfig(item.first);
+			descs[item.first] = mcfg;
+			//var& vec = remoteSockQPIdxs[item.first];
+			//vec.resize(mcfg.NumSockets);
+			var key2Qp = approximateSetPartition(kSizes, mcfg.Devices2Socket.size());
+
+			for (Cntr card = 0; card < mcfg.Devices2Socket.size(); card++)
+			{
+				//one qp connection per card.
+				qp2RemoteIdx[totalQPCnt] = item.first;
+				qp2RemoteDevIdx[totalQPCnt] = card;
+				qpPayloadSizes.push_back()
+				//vec.at(mcfg.Devices2Socket.at(card)).push_back(totalQPCnt);
+				totalQPCnt++;
+				CHECK(qp2RemoteIdx.size() == totalQPCnt);
+			}
+			//i know how to split keys to different connections 
+
+		}
+	}
+	Endpoints.resize(totalQPCnt);
+
 	//there maybe more QP than there are devices on local machine.
 	//assign QP to devices.
-	vector<float> qpPayloadSizes;
-	qpPayloadSizes.resize(totalQPCnt);
+	
 	for (Cntr i = 0; i < key2QP.size(); i++)
 	{
 		var key = keys.at(i);
@@ -386,6 +391,12 @@ void PHub::InitializePHubSpecifics()
 		Endpoints.at(i).RemoteQPNum = map.at(mName);
 	}
 
+	//check integrity.
+
+}
+
+void PHub::Push(PLinkKey key, NodeId destination)
+{
 
 }
 

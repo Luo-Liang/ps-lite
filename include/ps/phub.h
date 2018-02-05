@@ -69,7 +69,7 @@ struct MachineConfigDescriptor
 	std::vector<ibv_mr*> ib_DeviceMemoryRegions;
 	std::vector<vector<int>> Socket2Core;
 
-	
+
 };
 
 struct MachineConfigDescSlim
@@ -81,7 +81,7 @@ public:
 };
 
 struct PHubEndpoint {
-	uint16_t LocalLid = 0;
+	uint16_t LocalLid = -1;
 	uint16_t RemoteLid = -1;        // InfiniBand address of node. Remote Lid
 	uint32_t RemoteQPNum = -1;     // Queue pair number on node (like IP port number)
 	uint32_t LocalQPNum = -1;
@@ -96,7 +96,7 @@ struct PHubEndpoint {
 
 class PHub
 {
-	
+
 	Schedule schedule;
 	vector<NodeId> remotes;
 	shared_ptr<vector<KeyDesc>> pKeyDescs;
@@ -105,21 +105,22 @@ class PHub
 	std::vector<ibv_cq*> RCQs;
 	int totalPHubNodes;
 	std::vector<PHubEndpoint> Endpoints;
-
+	unordered_map<PLinkKey, unordered_map<NodeId, int>> KeyToQPIdx;
 
 public:
+	//global keysizes assuming contiguous keys.
 	unordered_map<PLinkKey, size_t> keySizes;
 	unordered_map<NodeId, string> nodeMap;
 	MachineConfigDescriptor machineConfig;
 	//my global ID
 	NodeId ID;
 	PHub(Schedule schedule, string redezvousUri,
-		unordered_map<NodeId,string> nodeToIP,
+		unordered_map<NodeId, string> nodeToIP,
 		unordered_map<PLinkKey, size_t>& size,
 		int totalParticipant,
 		NodeId Id);
 	string RendezvousUri;
-	
+
 	shared_ptr<Rendezvous> phubRendezvous = NULL;
 	shared_ptr<gloo::rendezvous::RedisStore> pRedisStore = NULL;
 	shared_ptr<gloo::transport::Device> pGlooDefaultDevice = NULL;
@@ -127,6 +128,10 @@ public:
 	int Push(NodeId destination, BufferHandle buf);
 	void InitializeDeviceSpecifics();
 	void InitializePHubSpecifics();
+	void Push(PLinkKey pkey, NodeId target);
+	void Pull(PLinkKey pkey, NodeId source);
+	void Broadcast(PLinkKey pkey, vector<NodeId>& targets);
+	void Gather(PLinkKey pkey, vector<NodeId>& sources);
 	shared_ptr<vector<KeyDesc>> RetrieveKeyDescs()
 	{
 		return pKeyDescs;
