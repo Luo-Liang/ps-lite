@@ -7,7 +7,6 @@
 #include "Helpers.h"
 //allocator speaks VIRTUAL key
 
-template <class T>
 class PHubAllocator
 {
 public:
@@ -62,145 +61,103 @@ public:
 	{
 		return Initialized;
 	}
-	//this needs to be in multiple stages because kvstore_dist does not have access to verb but is required to allocate buffer on the worker side.
-	//if requires merge buffer is toggled, it is a PHUB.
-	//a PHUB requires 2 merge buffers per key (for aggregating and reading).
-	//if not toggled, it is a infiniband van.
-	//an infiniband van requires only 1 buffer per key, because send and receive of a key is never overlapped.
-	void Init(std::vector<float>& keySizes,
+	//a phub requires the following per key:
+	// per machine receive buffer
+	// an aggregation buffer
+	// a read buffer.
+
+	//sizes in BYTES
+	void Init(std::vector<float>& sizes,
 		//bool RequiresMergeBuffer,
 		int copies,
-		int metaBufferSize,
-		std::vector<int> key2Socket,
+		//int metaBufferSize,
+		std::vector<int> k2Socket,
+		int elementWidth = 4
 		//this one better be false for Gloo to work efficiently.
-		bool metaBufferImmediatelyBeforeKVBuffer)
+		//bool metaBufferImmediatelyBeforeKVBuffer)
+	)
 	{
 		//keep the keySizes.
-		keyMap = keySizes;
-		MetaBufferImmediatelyBeforeKVBuffer = metaBufferImmediatelyBeforeKVBuffer;
-		int metaSize = metaBufferSize;
-		//allow workers to have multiple sockets.
-			//if (ps::Postoffice::Get()->van()->my_node().role == ps::Node::WORKER)
-			//{
-		//CHECK(socketCnt == 1);
-		//}
+		keySizes = sizes;
+
 		CHECK(!Initialized);
 		KeyCount = keySizes.size();
 		socketCount = *(max_element(key2Socket.begin(), key2Socket.end())) + 1;
+		key2Socket = k2Socket;
+		key2InSocketIdx.resize(keySizes.size());
 
+		vector<int> socketTicketers(socketCount);
+		vector<vector<int>> socket2Keys(socketCount);
 
-
-		//need to account for metaslim sizes.
-		//Consider theresizeo are 3 things:
-		//Send Buffer (for worker).
-		//Receive Buffer.
-		//Merge Buffer
-		//each of them need a series of MetaSlim
-		//how many bytes do we need?
-		uint64_t bytes = 0;
+		perSocketBytes.resize(socketCount);
 		std::vector<size_t> paddedActualKeySizes(keySizes.size());
-		for (size_t i = 0; i < keySizes.size(); i++)
+		for (Cntr i = 0; i < sizes.size(); i++)
 		{
-			//metadata * 3
-			//use padding.
-			size_t paddedElementCount = RoundUp(keySizes[i] / sizeof(float), INSTRUCTION_VECTOR_SIZE);
-			size_t paddedSize = paddedElementCount * sizeof(float);
-			bytes += paddedSize;
-			paddedActualKeySizes[i] = paddedSize;
-			//printf("k = %d, orig size = %d, padded size = %d\n", i, keySizes[i], paddedSize);
+			var sock = key2Socket.at(i);
+			var& ticket = socketTicketers.at(sock);
+			key2InSocketIdx.at(i) = ticket;
+			socket2Keys.at(sock).push_back(i);
+			ticket++;
+
+			size_t paddedElementCount = RoundUp(keySizes[i] / elementWidth, INSTRUCTION_VECTOR_SIZE);
+			size_t paddedSize = paddedElementCount * elementWidth;
+			perSocketBytes.at(sock) += paddedSize;
+			paddedActualKeySizes.at(i) = paddedSize;
 		}
 
-
-
-
-
-		uint64_t totalBytes = 0;
-		//3 * numberofkeys * sizeof(metaslim).
-		auto kvCount = 1;// + (RequiresMergeBuffer == true ? 2 : 0);
-		//receive buffer + 2 merge buffers OR receive buffer + send buffer.
-		//bytes needed for kv
-		totalBytes += kvCount * bytes;
-		//bytes needed for meta
-		//for PHUB, requires meta for receive (and send), and two merge buffers (one of them is not necessary) per key.
-		// + (RequiresMergeBuffer == true ? 2 : 0);
-		totalBytes += keySizes.size() * metaSize;
-
-		//now multiply that by the number of copies requested.
-		totalBytes *= copies;
-
-		//if a pshub, we need to add 2 copies of merge buffer and 2 copies of merge buffer meta per key.
-
-		totalBytes += 2 * (bytes + metaSize * keySizes.size());
-		StartAddresses.resize(socketCnt);
-		PHUBRecvKV.resize(socketCnt);
-		PHUBRecvMeta.resize(socketCnt);
+		StartAddresses.resize(socketCount);
+		PHUBRecvKV.resize(socketCount);
 		//one copy of merge buffer required.
-		PHUBMergeKV.resize(socketCnt);
-		PHUBMergeMeta.resize(socketCnt);
+		PHUBMergeKV.resize(socketCount);
 		// we need this amount of data per socke
-		StartAddresses.resize(socketCnt);
 
-		for (int socketId = 0; socketId < socketCnt; socketId++)
+		for (int socketId = 0; socketId < socketCount; socketId++)
 		{
-			auto addr = AlignedAllocateUniversal(totalBytes, socketId, INSTRUCTION_VECTOR_SIZE * sizeof(float));
+			var totalBytes = perSocketBytes.at(socketId);
+			auto addr = AlignedAllocateUniversal(totalBytes, socketId, INSTRUCTION_VECTOR_SIZE * elementWidth);
 			StartAddresses.at(socketId) = addr;
 			CHECK(addr) << " Requesting to allcoate " << totalBytes / 1024.0 / 1024.0 / 1024.0 << "GB of data failed";
 			//ugly
-			CHECK((metaSize & INSTRUCTION_VECTOR_SIZE_ADDR_MASK) == 0u);
-			AllocationLength = totalBytes;
-
 			PHUBRecvKV.at(socketId).resize(copies);
-			PHUBRecvMeta.at(socketId).resize(copies);
 			//one copy of merge buffer required.
 			PHUBMergeKV.at(socketId).resize(2);
-			PHUBMergeMeta.at(socketId).resize(2);
+			var sockKeyCnt = socket2Keys.at(socketId).size();
 
 			for (int i = 0; i < copies; i++)
 			{
-				PHUBRecvKV.at(socketId).at(i).resize(keySizes.size());
-				PHUBRecvMeta.at(socketId).at(i).resize(keySizes.size());
+				PHUBRecvKV.at(socketId).at(i).resize(sockKeyCnt);
 			}
-			PHUBMergeKV.at(socketId)[0].resize(keySizes.size());
-			PHUBMergeMeta.at(socketId)[0].resize(keySizes.size());
+			PHUBMergeKV.at(socketId)[0].resize(sockKeyCnt);
+			PHUBMergeKV.at(socketId)[1].resize(sockKeyCnt);
+
 			//now assign values!
 			void* cursor = addr;
-			//deal with SendMeta.
 			for (int cp = 0; cp < copies; cp++)
 			{
-				for (size_t i = 0; i < keySizes.size(); i++)
+				for (size_t i = 0; i < sockKeyCnt; i++)
 				{
-					//now setup receive buffer meta.
-					PHUBRecvMeta.at(socketId)[cp][i].first = cursor;
-					PHUBRecvMeta.at(socketId)[cp][i].second = metaSize;
-					cursor = cursor + metaSize;
+					var realKey = socket2Keys.at(socketId).at(i);
 					//now setup receive kv buffer.
 					CHECK(((uint64_t)cursor & INSTRUCTION_VECTOR_SIZE_ADDR_MASK) == 0);
 					PHUBRecvKV.at(socketId)[cp][i].first = cursor;
-					PHUBRecvKV.at(socketId)[cp][i].second = paddedActualKeySizes[i];
+					PHUBRecvKV.at(socketId)[cp][i].second = paddedActualKeySizes[realKey];
 					cursor = cursor + PHUBRecvKV.at(socketId)[cp][i].second;
-					if (cp == 0)
+					if (cp <= 1)
 					{
-						//i need two merge buffers.
-						PHUBMergeMeta.at(socketId)[cp][i].first = cursor;
-						PHUBMergeMeta.at(socketId)[cp][i].second = metaSize;
-						cursor = cursor + metaSize;
-
-						//setup merge kv buffer 1
+						//setup merge kv buffer 0 and 1
 						CHECK(((uint64_t)cursor & INSTRUCTION_VECTOR_SIZE_ADDR_MASK) == 0);
 						PHUBMergeKV.at(socketId).at(cp).at(i).first = cursor;
-						PHUBMergeKV.at(socketId).at(cp).at(i).second = paddedActualKeySizes[i];
+						PHUBMergeKV.at(socketId).at(cp).at(i).second = paddedActualKeySizes[realKey];
 						cursor = cursor + PHUBMergeKV.at(socketId)[cp][i].second;
 					}
 				}
 			}
-			memset(StartAddresses.at(socketId), 0, AllocationLength);
-			if (StartAddresses.at(socketId) + AllocationLength != cursor)
+			memset(StartAddresses.at(socketId), 0, perSocketBytes.at(socketId));
+			if (StartAddresses.at(socketId) + perSocketBytes.at(socketId) != cursor)
 			{
 				raise(SIGTRAP);
 			}
 		}
-		CHECK(AllocationLength != 0) << " socketCnt = " << socketCount << " machineCount = " << copies;
-
 		//CHECK(StartAddress + AllocationLength == cursor);
 		Initialized = true;
 	}
@@ -254,12 +211,14 @@ private:
 	bool MetaBufferImmediatelyBeforeKVBuffer;
 	//socket id -> copy id->key 
 	std::vector<std::vector<std::vector<std::pair<void*, size_t>>>> PHUBRecvKV;
-	std::vector<std::vector<std::vector<std::pair<void*, size_t>>>> PHUBRecvMeta;
+	//socket id->copy id -> key
 	std::vector<std::vector<std::vector<std::pair<void*, size_t>>>> PHUBMergeKV;
-	std::vector<std::vector<std::vector<std::pair<void*, size_t>>>> PHUBMergeMeta;
 	std::vector<void*> StartAddresses;
-	size_t AllocationLength = 0;
 	bool Initialized = false;
 	size_t socketCount = 0;
-	vector<float> keyMap;
+	vector<float> keySizes;
+	vector<int> key2Socket;
+	//the ith key in the selected index.
+	vector<int> key2InSocketIdx;
+	std::vector<size_t> perSocketBytes;
 };
