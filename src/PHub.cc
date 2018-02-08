@@ -7,7 +7,7 @@
 
 PHub::PHub(Schedule operations, string redezvousUri,
 	unordered_map<NodeId, string> nodeToIP,
-	unordered_map<PLinkKey, size_t>& size,
+	vector<float>& sizes,
 	int totalParticipant,
 	NodeId id)
 {
@@ -18,7 +18,7 @@ PHub::PHub(Schedule operations, string redezvousUri,
 	ID = id;
 	RendezvousUri = redezvousUri;
 	pKeyDescs = make_shared<vector<KeyDesc>>();
-	keySizes = size;
+	keySizes = sizes;
 }
 
 void PHub::InitializeDevice()
@@ -193,14 +193,9 @@ void PHub::InitializePHubSpecifics()
 	int totalQPCnt = 0;
 
 	//now i need to distribute keys equally to these QPs.
-	vector<PLinkKey> keys;
-	vector<float> kSizes;
-	for (var item : keySizes)
-	{
-		keys.push_back(item.first);
-		kSizes.push_back((float)item.second);
-	}
+	//keys should be contiguous.
 	vector<float> qpPayloadSizes;
+	unordered_map<NodeId, vector<int>> remoteKey2QPIdx;
 	for (var item : nodeMap)
 	{
 		if (ID != item.first)
@@ -209,33 +204,29 @@ void PHub::InitializePHubSpecifics()
 			descs[item.first] = mcfg;
 			//var& vec = remoteSockQPIdxs[item.first];
 			//vec.resize(mcfg.NumSockets);
-			var key2Qp = approximateSetPartition(kSizes, mcfg.Devices2Socket.size());
-
+			vector<float> setSizes;
+			var key2Qp = approximateSetPartition(keySizes, mcfg.Devices2Socket.size(), &setSizes);
+			CHECK(setSizes.size() == mcfg.Devices2Socket.size());
+			var& vec = remoteKey2QPIdx.at(item.first);
+			for (Cntr k = 0; k < keySizes.size(); k++)
+			{
+				vec.push_back(key2Qp.at(k) + totalQPCnt);
+			}
+			//regardless i need to iterate through the keys.
 			for (Cntr card = 0; card < mcfg.Devices2Socket.size(); card++)
 			{
 				//one qp connection per card.
 				qp2RemoteIdx[totalQPCnt] = item.first;
 				qp2RemoteDevIdx[totalQPCnt] = card;
-				qpPayloadSizes.push_back()
+				qpPayloadSizes.push_back(setSizes.at(card));
 				//vec.at(mcfg.Devices2Socket.at(card)).push_back(totalQPCnt);
-				totalQPCnt++;
+				totalQPCnt++; //why not just use qp2remoteidx.size?????
 				CHECK(qp2RemoteIdx.size() == totalQPCnt);
 			}
 			//i know how to split keys to different connections 
-
 		}
 	}
 	Endpoints.resize(totalQPCnt);
-
-	//there maybe more QP than there are devices on local machine.
-	//assign QP to devices.
-	
-	for (Cntr i = 0; i < key2QP.size(); i++)
-	{
-		var key = keys.at(i);
-		var qp = key2QP.at(i);
-		qpPayloadSizes.at(qp) += keySizes.at(key);
-	}
 
 	//assign qp to devices.
 	vector<int> qp2Dev = approximateSetPartition(qpPayloadSizes, machineConfig.ib_device_names.size());
@@ -392,7 +383,12 @@ void PHub::InitializePHubSpecifics()
 	}
 
 	//check integrity.
-
+	unordered_map<int, int> um;
+	for (Cntr i = 0; i < keySizes.size(); i++)
+	{
+		um[i] = keySizes[i];
+	}
+	allocator.Init(um, )
 }
 
 void PHub::Push(PLinkKey key, NodeId destination)

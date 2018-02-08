@@ -14,6 +14,8 @@
 #include <gloo/algorithm.h>
 #include "internal/ext.h"
 #include "rendezvous.h"
+#include "internal/PHubAllocator.h"
+
 using namespace std;
 typedef uint32_t NodeId;
 typedef uint64_t BufferHandle;
@@ -106,17 +108,18 @@ class PHub
 	int totalPHubNodes;
 	std::vector<PHubEndpoint> Endpoints;
 	unordered_map<PLinkKey, unordered_map<NodeId, int>> KeyToQPIdx;
-
+	PHubAllocator allocator;
 public:
 	//global keysizes assuming contiguous keys.
-	unordered_map<PLinkKey, size_t> keySizes;
+	//in bytes;
+	vector<float> keySizes;
 	unordered_map<NodeId, string> nodeMap;
 	MachineConfigDescriptor machineConfig;
 	//my global ID
 	NodeId ID;
 	PHub(Schedule schedule, string redezvousUri,
 		unordered_map<NodeId, string> nodeToIP,
-		unordered_map<PLinkKey, size_t>& size,
+		vector<float>& sizes,
 		int totalParticipant,
 		NodeId Id);
 	string RendezvousUri;

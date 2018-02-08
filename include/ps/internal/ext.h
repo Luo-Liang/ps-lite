@@ -28,7 +28,7 @@ std::vector<std::string> CxxxxStringSplit(const std::string& s, char delimiter)
 	return tokens;
 }
 
-std::vector<int> approximateSetPartition(std::vector<float>& sizes, int setCount)
+std::vector<int> approximateSetPartition(std::vector<float>& sizes, int setCount, vector<float>* setSizes = NULL)
 {
 	if (setCount == 0) return std::vector<int>();
 	std::vector<std::pair<int, float>> sizePaired(sizes.size());
@@ -63,6 +63,10 @@ std::vector<int> approximateSetPartition(std::vector<float>& sizes, int setCount
 		accumulator.at(minIdx) += sizes[i];
 		//printf("assigned %d = %f to set %d, set is currently %f\n", sizePaired[i].first, sizePaired[i].second, minIdx, accumulator.at(minIdx));
 		//assign this to the minimum buckets.
+	}
+	if (setSizes != NULL)
+	{
+		*setSizes = accumulator;
 	}
 	return result;
 }

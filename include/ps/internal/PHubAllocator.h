@@ -7,7 +7,7 @@
 #include "Helpers.h"
 //allocator speaks VIRTUAL key
 
-
+template <class T>
 class PHubAllocator
 {
 public:
@@ -62,28 +62,23 @@ public:
 	{
 		return Initialized;
 	}
-
-	static PHubAllocator* Get()
-	{
-		return &INSTANCE;
-	}
-
 	//this needs to be in multiple stages because kvstore_dist does not have access to verb but is required to allocate buffer on the worker side.
 	//if requires merge buffer is toggled, it is a PHUB.
 	//a PHUB requires 2 merge buffers per key (for aggregating and reading).
 	//if not toggled, it is a infiniband van.
 	//an infiniband van requires only 1 buffer per key, because send and receive of a key is never overlapped.
-	void Init(std::unordered_map<int, int>& keySizes,
+	void Init(std::vector<float>& keySizes,
 		//bool RequiresMergeBuffer,
 		int copies,
 		int metaBufferSize,
-		int socketCnt,
+		std::vector<int> key2Socket,
 		//this one better be false for Gloo to work efficiently.
 		bool metaBufferImmediatelyBeforeKVBuffer)
 	{
+		//keep the keySizes.
+		keyMap = keySizes;
 		MetaBufferImmediatelyBeforeKVBuffer = metaBufferImmediatelyBeforeKVBuffer;
 		int metaSize = metaBufferSize;
-		socketCount = socketCnt;
 		//allow workers to have multiple sockets.
 			//if (ps::Postoffice::Get()->van()->my_node().role == ps::Node::WORKER)
 			//{
@@ -91,12 +86,15 @@ public:
 		//}
 		CHECK(!Initialized);
 		KeyCount = keySizes.size();
+		socketCount = *(max_element(key2Socket.begin(), key2Socket.end())) + 1;
+
+
+
 		//need to account for metaslim sizes.
 		//Consider theresizeo are 3 things:
 		//Send Buffer (for worker).
 		//Receive Buffer.
 		//Merge Buffer
-
 		//each of them need a series of MetaSlim
 		//how many bytes do we need?
 		uint64_t bytes = 0;
@@ -111,6 +109,11 @@ public:
 			paddedActualKeySizes[i] = paddedSize;
 			//printf("k = %d, orig size = %d, padded size = %d\n", i, keySizes[i], paddedSize);
 		}
+
+
+
+
+
 		uint64_t totalBytes = 0;
 		//3 * numberofkeys * sizeof(metaslim).
 		auto kvCount = 1;// + (RequiresMergeBuffer == true ? 2 : 0);
@@ -249,7 +252,6 @@ public:
 	}
 private:
 	bool MetaBufferImmediatelyBeforeKVBuffer;
-	static PHubAllocator INSTANCE;
 	//socket id -> copy id->key 
 	std::vector<std::vector<std::vector<std::pair<void*, size_t>>>> PHUBRecvKV;
 	std::vector<std::vector<std::vector<std::pair<void*, size_t>>>> PHUBRecvMeta;
@@ -259,4 +261,5 @@ private:
 	size_t AllocationLength = 0;
 	bool Initialized = false;
 	size_t socketCount = 0;
+	vector<float> keyMap;
 };
