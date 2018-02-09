@@ -190,7 +190,7 @@ void PHub::InitializePHubSpecifics()
 	//who am i talking to?
 	unordered_map<NodeId, MachineConfigDescSlim> descs;
 	//unordered_map<NodeId, vector<vector<int>>> remoteSockQPIdxs;
-	vector<NodeId> qp2RemoteIdx;
+	vector<NodeId> qp2RemoteNode;
 	vector<int> qp2RemoteDevIdx;
 	int totalQPCnt = 0;
 
@@ -200,6 +200,7 @@ void PHub::InitializePHubSpecifics()
 	//now i need to distribute keys equally to these QPs.
 	//keys should be contiguous.
 	vector<float> qpPayloadSizes;
+	//given a remote and a key, tell me which qp i should data to.
 	unordered_map<NodeId, vector<int>> remoteKey2QPIdx;
 	//pull device information from all remotes.
 	var totalRemoteDevs = 0;
@@ -221,7 +222,8 @@ void PHub::InitializePHubSpecifics()
 		dev2Keys.at(dev).push_back(i);
 	}
 
-
+	vector<int> qp2Dev;
+	unordered_map<string, int> qpTicketer;
 	for (var remotes : nodeMap)
 	{
 		if (remotes.first == ID) continue;
@@ -233,53 +235,41 @@ void PHub::InitializePHubSpecifics()
 		{
 			var& myKeys = dev2Keys.at(i);
 			//whoever on the remote that is in charge o fthe keys require connection.
-			unordered_set<> us;
+			remoteKey2QPIdx.at(remotes.first).resize(keySizes.size());
+			for (int kIdx : myKeys)
+			{
+				var rDev = remoteKey2Dev.at(kIdx);
+
+				var rName = CxxxxStringFormat("%d:%d", remotes.first, rDev);
+				//grab a ticket.
+				var existingQP = qpTicketer.find(rName);
+				if (existingQP == qpTicketer.end())
+				{
+					//first time seen.
+					var id = qpTicketer.size();
+					qp2Dev.push_back(i);
+					qp2RemoteNode.push_back(remotes.first);
+					qp2RemoteDevIdx.push_back(rDev);
+					remoteKey2QPIdx.at(remotes.first).at(kIdx) = id;
+					CHECK(qp2Dev.size() == qpTicketer.size());
+				}
+				else
+				{
+					//this qp already exists, just getting assigned a new key.
+					var id = existingQP->second;
+					//no qp is created, however, we need to assign remoteKey2QPIdx.
+					remoteKey2QPIdx.at(remotes.first).at(kIdx) = id;
+				}
+			}
 		}
 	}
 
-
-
-	for (var item : nodeMap)
-	{
-		if (ID != item.first)
-		{
-			var mcfg = phubRendezvous->PullMachineConfig(item.first);
-			descs[item.first] = mcfg;
-			//var& vec = remoteSockQPIdxs[item.first];
-			//vec.resize(mcfg.NumSockets);
-			vector<float> setSizes;
-			var remoteQPCnt = mcfg.Devices2Socket.size() * machineConfig.ib_num_devices;
-			var key2Qp = approximateSetPartition(keySizes, remoteQPCnt, &setSizes);
-			CHECK(setSizes.size() == mcfg.Devices2Socket.size());
-			var& vec = remoteKey2QPIdx.at(item.first);
-			for (Cntr k = 0; k < keySizes.size(); k++)
-			{
-				vec.push_back(key2Qp.at(k) + totalQPCnt);
-			}
-			for (Cntr i = 0; i < remoteQPCnt; i++)
-			{
-				//one qp connection per card.
-				qp2RemoteIdx.push_back(item.first);
-				//roughly balanced.
-				qp2RemoteDevIdx.push_back(i % mcfg.Devices2Socket.size());
-				qpPayloadSizes.push_back(setSizes.at(i));
-				//vec.at(mcfg.Devices2Socket.at(card)).push_back(totalQPCnt);
-				//totalQPCnt++; //why not just use qp2remoteidx.size?????
-				CHECK(qp2RemoteIdx.size() == totalQPCnt);
-			}
-			//i know how to split keys to different connections 
-		}
-	}
-
-
-
-
-	totalQPCnt = qp2RemoteIdx.size();
+	totalQPCnt = qp2RemoteNode.size();
 	Endpoints.resize(totalQPCnt);
 
 	//assign qp to devices.
-	vector<int> qp2Dev = approximateSetPartition(qpPayloadSizes, machineConfig.ib_device_names.size());
-	CHECK(qp2Dev.size() == totalQPCnt);
+	//vector<int> qp2Dev = approximateSetPartition(qpPayloadSizes, machineConfig.ib_device_names.size());
+	//CHECK(qp2Dev.size() == totalQPCnt);
 
 	//assign qp to cores.
 
@@ -303,8 +293,7 @@ void PHub::InitializePHubSpecifics()
 	}
 
 	//map cq to cores.
-	vector<int> cq2Cores;
-	cq2Cores.resize(cqCnt);
+	vector<int> cq2Cores(cqCnt);
 	vector<int> socketTicketer(machineConfig.SocketCount);
 	for (Cntr i = 0; i < cqCnt; i++)
 	{
@@ -363,7 +352,7 @@ void PHub::InitializePHubSpecifics()
 		Endpoints.at(i).CoreIdx = cq2Cores.at(Endpoints.at(i).CQIdx);
 		CHECK(Endpoints.at(i).SocketIdx == machineConfig.Core2SocketIdx.at(Endpoints.at(i).CoreIdx));
 		Endpoints.at(i).Index = i;
-		Endpoints.at(i).RemoteMachineIdx = qp2RemoteIdx.at(i);
+		Endpoints.at(i).RemoteMachineIdx = qp2RemoteNode.at(i);
 		Endpoints.at(i).RemoteCardIdx = qp2RemoteDevIdx.at(i);
 		Endpoints.at(i).LocalQPNum = pQP->qp_num;
 		Endpoints.at(i).LocalLid = machineConfig.ib_ports_attribute.at(dev).lid;
@@ -380,7 +369,7 @@ void PHub::InitializePHubSpecifics()
 		bcast["lid"] = machineConfig.ib_ports_attribute.at(i).lid;
 		for (Cntr id = 0; id < totalQPCnt; id++)
 		{
-			var qpRemote = qp2RemoteIdx.at(id);
+			var qpRemote = qp2RemoteNode.at(id);
 			var qpDevId = qp2RemoteDevIdx.at(id);
 			if (qpDevId == i)
 			{
@@ -415,7 +404,7 @@ void PHub::InitializePHubSpecifics()
 	//now assign qp to current qps.
 	for (Cntr i = 0; i < totalQPCnt; i++)
 	{
-		var rNode = qp2RemoteIdx.at(i);
+		var rNode = qp2RemoteNode.at(i);
 		var rCard = qp2RemoteDevIdx.at(i);
 
 		var rName = CxxxxStringFormat("%d:%d", rNode, rCard);
