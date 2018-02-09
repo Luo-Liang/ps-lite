@@ -5,13 +5,16 @@
 #include "..\include\ps\Schedule.h"
 #include <unordered_set>
 
-PHub::PHub(Schedule operations, string redezvousUri,
+PHub::PHub(Schedule operations,
+	string redezvousUri,
 	unordered_map<NodeId, string> nodeToIP,
 	vector<float>& sizes,
 	int totalParticipant,
+	int elementWidth,
 	NodeId id)
 {
 	totalPHubNodes = totalParticipant;
+	ElementWidth = elementWidth;
 	schedule = operations;
 	nodeMap = nodeToIP;
 	//now connect that.
@@ -184,18 +187,58 @@ void PHub::InitializePHubSpecifics()
 {
 	//use 1 QP per connection.
 	//how many remotes are there?
-	//??????????
 	//who am i talking to?
 	unordered_map<NodeId, MachineConfigDescSlim> descs;
 	//unordered_map<NodeId, vector<vector<int>>> remoteSockQPIdxs;
-	unordered_map<int, NodeId> qp2RemoteIdx;
-	unordered_map<int, int> qp2RemoteDevIdx;
+	vector<NodeId> qp2RemoteIdx;
+	vector<int> qp2RemoteDevIdx;
 	int totalQPCnt = 0;
+
+	//first, assign keys to devices.
+	var key2Dev = approximateSetPartition(keySizes, machineConfig.ib_num_devices);
 
 	//now i need to distribute keys equally to these QPs.
 	//keys should be contiguous.
 	vector<float> qpPayloadSizes;
 	unordered_map<NodeId, vector<int>> remoteKey2QPIdx;
+	//pull device information from all remotes.
+	var totalRemoteDevs = 0;
+	for (var item : nodeMap)
+	{
+		if (ID != item.first)
+		{
+			var mcfg = phubRendezvous->PullMachineConfig(item.first);
+			descs[item.first] = mcfg;
+			totalRemoteDevs += mcfg.Devices2Socket.size();
+		}
+	}
+
+	//dev to keys.
+	vector<vector<PLinkKey>> dev2Keys(machineConfig.ib_num_devices);
+	for (Cntr i = 0; i < key2Dev.size(); i++)
+	{
+		var dev = key2Dev.at(i);
+		dev2Keys.at(dev).push_back(i);
+	}
+
+
+	for (var remotes : nodeMap)
+	{
+		if (remotes.first == ID) continue;
+		var& cfg = descs.at(remotes.first);
+		var remoteKey2Dev = approximateSetPartition(keySizes, cfg.Devices2Socket.size());
+
+		//foreach local card, figure out who to connect?
+		for (Cntr i = 0; i < machineConfig.ib_num_devices; i++)
+		{
+			var& myKeys = dev2Keys.at(i);
+			//whoever on the remote that is in charge o fthe keys require connection.
+			unordered_set<> us;
+		}
+	}
+
+
+
 	for (var item : nodeMap)
 	{
 		if (ID != item.first)
@@ -205,27 +248,33 @@ void PHub::InitializePHubSpecifics()
 			//var& vec = remoteSockQPIdxs[item.first];
 			//vec.resize(mcfg.NumSockets);
 			vector<float> setSizes;
-			var key2Qp = approximateSetPartition(keySizes, mcfg.Devices2Socket.size(), &setSizes);
+			var remoteQPCnt = mcfg.Devices2Socket.size() * machineConfig.ib_num_devices;
+			var key2Qp = approximateSetPartition(keySizes, remoteQPCnt, &setSizes);
 			CHECK(setSizes.size() == mcfg.Devices2Socket.size());
 			var& vec = remoteKey2QPIdx.at(item.first);
 			for (Cntr k = 0; k < keySizes.size(); k++)
 			{
 				vec.push_back(key2Qp.at(k) + totalQPCnt);
 			}
-			//regardless i need to iterate through the keys.
-			for (Cntr card = 0; card < mcfg.Devices2Socket.size(); card++)
+			for (Cntr i = 0; i < remoteQPCnt; i++)
 			{
 				//one qp connection per card.
-				qp2RemoteIdx[totalQPCnt] = item.first;
-				qp2RemoteDevIdx[totalQPCnt] = card;
-				qpPayloadSizes.push_back(setSizes.at(card));
+				qp2RemoteIdx.push_back(item.first);
+				//roughly balanced.
+				qp2RemoteDevIdx.push_back(i % mcfg.Devices2Socket.size());
+				qpPayloadSizes.push_back(setSizes.at(i));
 				//vec.at(mcfg.Devices2Socket.at(card)).push_back(totalQPCnt);
-				totalQPCnt++; //why not just use qp2remoteidx.size?????
+				//totalQPCnt++; //why not just use qp2remoteidx.size?????
 				CHECK(qp2RemoteIdx.size() == totalQPCnt);
 			}
 			//i know how to split keys to different connections 
 		}
 	}
+
+
+
+
+	totalQPCnt = qp2RemoteIdx.size();
 	Endpoints.resize(totalQPCnt);
 
 	//assign qp to devices.
@@ -370,7 +419,7 @@ void PHub::InitializePHubSpecifics()
 		var rCard = qp2RemoteDevIdx.at(i);
 
 		var rName = CxxxxStringFormat("%d:%d", rNode, rCard);
-		
+
 		var mNode = ID;
 		var mCard = qp2Dev.at(i);
 
@@ -383,12 +432,8 @@ void PHub::InitializePHubSpecifics()
 	}
 
 	//check integrity.
-	unordered_map<int, int> um;
-	for (Cntr i = 0; i < keySizes.size(); i++)
-	{
-		um[i] = keySizes[i];
-	}
-	allocator.Init(um, )
+	//nodeMap.size includes me.
+	allocator.Init(keySizes, nodeMap.size(), )
 }
 
 void PHub::Push(PLinkKey key, NodeId destination)

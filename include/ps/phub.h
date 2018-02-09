@@ -77,9 +77,9 @@ struct MachineConfigDescriptor
 struct MachineConfigDescSlim
 {
 public:
-	int NumSockets;
 	std::vector<int> Devices2Socket;
 	std::vector<int> Cores2Socket;
+	int NumSockets;
 };
 
 struct PHubEndpoint {
@@ -109,6 +109,7 @@ class PHub
 	std::vector<PHubEndpoint> Endpoints;
 	unordered_map<PLinkKey, unordered_map<NodeId, int>> KeyToQPIdx;
 	PHubAllocator allocator;
+	int ElementWidth;
 public:
 	//global keysizes assuming contiguous keys.
 	//in bytes;
@@ -121,6 +122,7 @@ public:
 		unordered_map<NodeId, string> nodeToIP,
 		vector<float>& sizes,
 		int totalParticipant,
+		int elementWidth,
 		NodeId Id);
 	string RendezvousUri;
 

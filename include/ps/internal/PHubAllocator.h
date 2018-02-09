@@ -51,10 +51,10 @@ public:
 		return PHUBReceiveMetaBuffer(key, copyIdx, socketId, outLength);
 	}
 
-	void GetAllocatedRange(void*& start, int socketId, int& length)
+	void GetAllocatedRange(int socketId, void*& start, int& length)
 	{
 		start = StartAddresses.at(socketId);
-		length = AllocationLength;
+		length = perSocketBytes.at(socketId);
 	}
 
 	bool IsInitialized()
