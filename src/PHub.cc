@@ -234,7 +234,7 @@ void PHub::InitializePHubSpecifics()
 		for (Cntr i = 0; i < machineConfig.ib_num_devices; i++)
 		{
 			var& myKeys = dev2Keys.at(i);
-			//whoever on the remote that is in charge o fthe keys require connection.
+			//whoever on the remote that is in charge of the keys require connection.
 			remoteKey2QPIdx.at(remotes.first).resize(keySizes.size());
 			for (int kIdx : myKeys)
 			{
@@ -378,6 +378,8 @@ void PHub::InitializePHubSpecifics()
 				bcast[remoteName] = QPs.at(id)->qp_num;
 			}
 		}
+		var mapName = CxxxxStringFormat("QPAndLidExchange:%d:%d", ID, i);
+		phubRendezvous->PushMap<int>(mapName, bcast);
 		//foreach remote device, tell me what is my queue pair number?
 	}
 
@@ -397,8 +399,8 @@ void PHub::InitializePHubSpecifics()
 		//pull queue pairs.
 		for (Cntr i = 0; i < totalDevs; i++)
 		{
-			var key = CxxxxStringFormat("%d:%d", rNode, i);
-			cardQPCache[key] = phubRendezvous->PullQP(key);
+			var key = CxxxxStringFormat("QPAndLidExchange:%d:%d", rNode, i);
+			cardQPCache[key] = phubRendezvous->PullMap<int>(key);
 		}
 	}
 
@@ -433,7 +435,34 @@ void PHub::InitializePHubSpecifics()
 	allocator.Init(keySizes, nodeMap.size(), CxxxxSelect<int, int>(key2Dev, [key2Sock](int x) { return key2Sock.at(x); }), ElementWidth);
 	phubRendezvous->SynchronousBarrier("PHubAllocator", totalPHubNodes);
 
-	//copy to 
+
+	//first, create a node to index mapping
+	int index = 0;
+	for (var remote : nodeMap)
+	{
+		nodeID2Index.at(remote.first) = index;
+		unordered_map<string, uint64_t> addrMap;
+		for (Cntr i = 0; i < keySizes.size(); i++)
+		{
+			var sock = key2Sock.at(i);
+			//create a broadcast map.
+			size_t notUsed;
+			var name = CxxxxStringFormat("%d", i);
+			addrMap[name] = (uint64_t)allocator.PHUBReceiveKVBuffer(i, index, sock, notUsed);
+		}
+		index++;
+		var mapName = CxxxxStringFormat("ADDR:%d:%d", ID, remote.first);
+		phubRendezvous->PushMap<uint64_t>(mapName, addrMap);
+	}
+
+	//barrier.
+	phubRendezvous->SynchronousBarrier("AddressExchange", totalPHubNodes);
+
+	//now, pull addresses.
+	for (var remote : nodeMap)
+	{
+		
+	}
 }
 
 void PHub::Push(PLinkKey key, NodeId destination)

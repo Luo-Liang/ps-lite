@@ -96,10 +96,11 @@ public:
 
 			for (int i = 0; i < copies; i++)
 			{
-				PHUBRecvKV.at(socketId).at(i).resize(sockKeyCnt);
+				PHUBRecvKV.at(socketId).at(i).resize(sizes.size());
 			}
-			PHUBMergeKV.at(socketId)[0].resize(sockKeyCnt);
-			PHUBMergeKV.at(socketId)[1].resize(sockKeyCnt);
+			//set up traps.
+			PHUBMergeKV.at(socketId)[0].resize(sizes.size());
+			PHUBMergeKV.at(socketId)[1].resize(sizes.size());
 
 			//now assign values!
 			void* cursor = addr;
@@ -110,16 +111,16 @@ public:
 					var realKey = socket2Keys.at(socketId).at(i);
 					//now setup receive kv buffer.
 					CHECK(((uint64_t)cursor & INSTRUCTION_VECTOR_SIZE_ADDR_MASK) == 0);
-					PHUBRecvKV.at(socketId)[cp][i].first = cursor;
-					PHUBRecvKV.at(socketId)[cp][i].second = paddedActualKeySizes[realKey];
-					cursor = cursor + PHUBRecvKV.at(socketId)[cp][i].second;
+					PHUBRecvKV.at(socketId)[cp][realKey].first = cursor;
+					PHUBRecvKV.at(socketId)[cp][realKey].second = paddedActualKeySizes[realKey];
+					cursor = cursor + PHUBRecvKV.at(socketId)[cp][realKey].second;
 					if (cp <= 1)
 					{
 						//setup merge kv buffer 0 and 1
 						CHECK(((uint64_t)cursor & INSTRUCTION_VECTOR_SIZE_ADDR_MASK) == 0);
-						PHUBMergeKV.at(socketId).at(cp).at(i).first = cursor;
-						PHUBMergeKV.at(socketId).at(cp).at(i).second = paddedActualKeySizes[realKey];
-						cursor = cursor + PHUBMergeKV.at(socketId)[cp][i].second;
+						PHUBMergeKV.at(socketId).at(cp).at(realKey).first = cursor;
+						PHUBMergeKV.at(socketId).at(cp).at(realKey).second = paddedActualKeySizes[realKey];
+						cursor = cursor + PHUBMergeKV.at(socketId)[cp][realKey].second;
 					}
 				}
 			}

@@ -75,7 +75,8 @@ public:
 		return mcds;
 	}
 
-	void PushQP(string cardId, unordered_map<string, int>& map)
+	template<class T>
+	void PushMap(string cardId, unordered_map<string, T>& map)
 	{
 		json m(map);
 		var j = m.dump();
@@ -83,13 +84,14 @@ public:
 		CHECK(reply) << pContext->errstr;
 	}
 
-	unordered_map<string, int> PullQP(string cardId)
+	template<class T>
+	unordered_map<string, int> PullMap(string cardId)
 	{
 		var reply = redisCommand(pContext, "GET %s", cardId.c_str());
 		CHECK(reply) << pContext->errstr;
 		var pRep = (redisReply*)reply;
 		var j = json::parse(pRep->str);
-		unordered_map<string, int> r = j;
+		unordered_map<string, T> r = j;
 		return r;
 	}
 };

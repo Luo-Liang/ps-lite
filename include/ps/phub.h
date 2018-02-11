@@ -98,9 +98,6 @@ struct PHubEndpoint {
 
 class PHub
 {
-
-	Schedule schedule;
-	vector<NodeId> remotes;
 	shared_ptr<vector<KeyDesc>> pKeyDescs;
 	std::vector<ibv_qp*> QPs;
 	std::vector<ibv_cq*> SCQs;
@@ -110,6 +107,7 @@ class PHub
 	unordered_map<PLinkKey, unordered_map<NodeId, int>> KeyToQPIdx;
 	PHubAllocator allocator;
 	int ElementWidth;
+	unordered_map<NodeId, int> nodeID2Index;
 public:
 	//global keysizes assuming contiguous keys.
 	//in bytes;
