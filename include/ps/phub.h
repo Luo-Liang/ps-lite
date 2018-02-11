@@ -118,14 +118,17 @@ public:
 	MachineConfigDescriptor machineConfig;
 	//my global ID
 	NodeId ID;
-	PHub(Schedule schedule, string redezvousUri,
+	PHub(Schedule schedule, 
+		string redezvousUri,
 		unordered_map<NodeId, string> nodeToIP,
 		vector<float>& sizes,
+		vector<void*> applicationSuppliedAddrs,
 		int totalParticipant,
 		int elementWidth,
 		NodeId Id);
 	string RendezvousUri;
 
+	vector<void*> ApplicationSuppliedAddrs;
 	shared_ptr<Rendezvous> phubRendezvous = NULL;
 	shared_ptr<gloo::rendezvous::RedisStore> pRedisStore = NULL;
 	shared_ptr<gloo::transport::Device> pGlooDefaultDevice = NULL;

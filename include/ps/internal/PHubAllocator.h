@@ -12,12 +12,6 @@ class PHubAllocator
 public:
 	size_t KeyCount;
 
-	//Note that this aliases with PHUBReceiveKVBuffer
-	void* PHUBSendKVBuffer(int key, int copyIdx, int socketId, size_t& outLength)
-	{
-		return PHUBReceiveKVBuffer(key, copyIdx, socketId, outLength);
-	}
-
 	void* PHUBMergeKVBuffer(int key, int socketId, int copyIdx, size_t& outLength)
 	{
 		CHECK(PHUBMergeKV[socketId][copyIdx][key].first != NULL);
@@ -30,25 +24,6 @@ public:
 		CHECK(PHUBRecvKV[socketId][copyIdx][key].first != NULL);
 		outLength = PHUBRecvKV[socketId][copyIdx][key].second;
 		return PHUBRecvKV[socketId][copyIdx][key].first;
-	}
-
-	void* PHUBReceiveMetaBuffer(int key, int copyIdx, int socketId, size_t& outLength)
-	{
-		CHECK(PHUBRecvMeta[socketId][copyIdx][key].first != NULL);
-		outLength = PHUBRecvMeta[socketId][copyIdx][key].second;
-		return (void*)PHUBRecvMeta[socketId][copyIdx][key].first;
-	}
-
-	void* PHUBMergeMetaBuffer(int key, int copyIdx, int socketId, size_t& outLength)
-	{
-		CHECK(PHUBMergeMeta[socketId][copyIdx][key].first != NULL);
-		outLength = PHUBMergeMeta[socketId][copyIdx][key].second;
-		return (void*)PHUBMergeMeta[socketId][copyIdx][key].first;
-	}
-	//alias to receive metabuffer.
-	void* PHUBSendMetaBuffer(int key, int copyIdx, int socketId, size_t& outLength)
-	{
-		return PHUBReceiveMetaBuffer(key, copyIdx, socketId, outLength);
 	}
 
 	void GetAllocatedRange(int socketId, void*& start, int& length)
@@ -72,14 +47,10 @@ public:
 		int copies,
 		//int metaBufferSize,
 		std::vector<int> k2Socket,
-		int elementWidth = 4
-		//this one better be false for Gloo to work efficiently.
-		//bool metaBufferImmediatelyBeforeKVBuffer)
-	)
+		int elementWidth = 4)
 	{
 		//keep the keySizes.
 		keySizes = sizes;
-
 		CHECK(!Initialized);
 		KeyCount = keySizes.size();
 		socketCount = *(max_element(key2Socket.begin(), key2Socket.end())) + 1;
@@ -164,13 +135,7 @@ public:
 	void* GetStartAddress(int socketIdx, size_t& len)
 	{
 		CHECK(Initialized);
-		CHECK(AllocationLength != 0);
-		len = AllocationLength;
 		return StartAddresses.at(socketIdx);
-	}
-	bool MetaKVContinuous()
-	{
-		return MetaBufferImmediatelyBeforeKVBuffer;
 	}
 
 	void VerifyPHUBRecvKV(int socketId, int remoteRank, int key, void* start, void* endExclusive)
@@ -179,36 +144,13 @@ public:
 		CHECK(PHUBRecvKV.at(socketId).at(remoteRank).at(key).second == (size_t)endExclusive - (size_t)start);
 	}
 
-	void VerifyPHUBRecvMeta(int socketId, int remoteRank, int key, void* start, void* endExclusive)
-	{
-		CHECK(PHUBRecvMeta.at(socketId).at(remoteRank).at(key).first == start);
-		CHECK(PHUBRecvMeta.at(socketId).at(remoteRank).at(key).second == (size_t)endExclusive - (size_t)start);
-	}
-
 	void VerifyPHUBMergeKV(int socketId, int key, void* start, void* endExclusive)
 	{
 		CHECK(PHUBMergeKV.at(socketId).at(0).at(key).first == start);
 		CHECK(PHUBMergeKV.at(socketId).at(0).at(key).second == (size_t)endExclusive - (size_t)start);
 	}
 
-	void VerifyPHUBMergeMeta(int socketId, int key, void* start, void* endExclusive)
-	{
-		CHECK(PHUBMergeMeta.at(socketId).at(0).at(key).first == start);
-		CHECK(PHUBMergeMeta.at(socketId).at(0).at(key).second == (size_t)endExclusive - (size_t)start);
-	}
-	void VerifyPHUBMergeKV1(int socketId, int key, void* start, void* endExclusive)
-	{
-		CHECK(PHUBMergeKV.at(socketId).at(1).at(key).first == start);
-		CHECK(PHUBMergeKV.at(socketId).at(1).at(key).second == (size_t)endExclusive - (size_t)start);
-	}
-
-	void VerifyPHUBMergeMeta1(int socketId, int key, void* start, void* endExclusive)
-	{
-		CHECK(PHUBMergeMeta.at(socketId).at(1).at(key).first == start);
-		CHECK(PHUBMergeMeta.at(socketId).at(1).at(key).second == (size_t)endExclusive - (size_t)start);
-	}
 private:
-	bool MetaBufferImmediatelyBeforeKVBuffer;
 	//socket id -> copy id->key 
 	std::vector<std::vector<std::vector<std::pair<void*, size_t>>>> PHUBRecvKV;
 	//socket id->copy id -> key

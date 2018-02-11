@@ -239,8 +239,7 @@ void PHub::InitializePHubSpecifics()
 			for (int kIdx : myKeys)
 			{
 				var rDev = remoteKey2Dev.at(kIdx);
-
-				var rName = CxxxxStringFormat("%d:%d", remotes.first, rDev);
+				var rName = CxxxxStringFormat("LOCAL:%d:%d:%d", i, remotes.first, rDev);
 				//grab a ticket.
 				var existingQP = qpTicketer.find(rName);
 				if (existingQP == qpTicketer.end())
@@ -282,10 +281,10 @@ void PHub::InitializePHubSpecifics()
 	vector<int> qp2cq;
 	int cqCnt = min(totalQPCnt, machineConfig.ib_num_devices);
 
-	//create one CQ per device.
 	for (Cntr i = 0; i < totalQPCnt; i++)
 	{
 		var dev = qp2Dev.at(i);
+		//a single CQ is used in a single device.
 		qp2cq.push_back(dev);
 		Endpoints.at(i).CQIdx = dev;
 		Endpoints.at(i).DeviceIdx = dev;
@@ -370,10 +369,12 @@ void PHub::InitializePHubSpecifics()
 		for (Cntr id = 0; id < totalQPCnt; id++)
 		{
 			var qpRemote = qp2RemoteNode.at(id);
-			var qpDevId = qp2RemoteDevIdx.at(id);
+			var qpDevId = qp2Dev.at(id);
+			var qpRemoteDevId = qp2RemoteDevIdx.at(id);
 			if (qpDevId == i)
 			{
-				var remoteName = CxxxxStringFormat("%d:%d", qpRemote, qpDevId);
+				//this is my QP, talking to qpRemote:qpRemoteDevId
+				var remoteName = CxxxxStringFormat("%d:%d", qpRemote, qpRemoteDevId);
 				bcast[remoteName] = QPs.at(id)->qp_num;
 			}
 		}
@@ -422,11 +423,22 @@ void PHub::InitializePHubSpecifics()
 
 	//check integrity.
 	//nodeMap.size includes me.
-	allocator.Init(keySizes, nodeMap.size(), )
+	vector<int> key2Sock(keySizes.size());
+	for (Cntr i = 0; i < keySizes.size(); i++)
+	{
+		var dev = key2Dev.at(i);
+		var sock = machineConfig.ib_Device2SocketIdx.at(dev);
+		key2Sock.at(i) = sock;
+	}
+	allocator.Init(keySizes, nodeMap.size(), CxxxxSelect<int, int>(key2Dev, [key2Sock](int x) { return key2Sock.at(x); }), ElementWidth);
+	phubRendezvous->SynchronousBarrier("PHubAllocator", totalPHubNodes);
+
+	//copy to 
 }
 
 void PHub::Push(PLinkKey key, NodeId destination)
 {
+	//now as if everything is correct.
 
 }
 
