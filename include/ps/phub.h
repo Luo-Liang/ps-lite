@@ -15,6 +15,7 @@
 #include "internal/ext.h"
 #include "rendezvous.h"
 #include "internal/PHubAllocator.h"
+#include "internal/PHubStructures.h"
 
 using namespace std;
 typedef uint32_t NodeId;
@@ -108,6 +109,7 @@ class PHub
 	PHubAllocator allocator;
 	int ElementWidth;
 	unordered_map<NodeId, int> nodeID2Index;
+	vector<PHub::PHubMergeBuffer> MergeBuffers;
 public:
 	//global keysizes assuming contiguous keys.
 	//in bytes;

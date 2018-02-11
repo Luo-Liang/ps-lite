@@ -9,13 +9,12 @@
 #include "Optimizers.h"
 #include <signal.h>
 #include <limits.h>
-#include "Verbs.hpp"
 /*#define PHUB_MAX_KEY_BITS 22
 #define PHUB_MAX_KEY ((1<<PHUB_MAX_KEY_BITS) - 1)
 #define PHUB_IMM_KEY_MASK PHUB_MAX_KEY
 #define PHUB_IMM_SENDER_MASK ((1<<(32 - PHUB_MAX_KEY_BITS))-1)*/
 
-namespace ps
+namespace PHub
 {
 	//PSHUB requires only 1 sge per message, instead of 2.
 	//PSHUB requires sending out 2 messages.
@@ -53,22 +52,18 @@ namespace ps
 		std::vector<int> remoteQPIdxs;
 
 		std::vector<std::vector<ibv_sge>> RDMAWorkerSendSgesArray;
-		void Init(Verbs* verbs, int bufferLen, Key key,
+		void Init(int bufferLen, PLinkKey key,
 			char* pBuf1,
 			char* pBuf2,
-			std::vector<uint64_t> rdmaRemoteKVBuffers)
+			std::vector<uint64_t> rdmaRemoteKVBuffers,
+			int elementWidth)
 		{
 			CHECK(pBuf1 != NULL);
 			CHECK(pBuf2 != NULL);
-			CHECK(verbs != NULL);
-			//CHECK(sizeof(MetaSlim) % (INSTRUCTION_VECTOR_SIZE * sizeof(float)) == 0) << "MetaSlim's size made it not possible to align subsequent floats in MergeBuffer";
 			Length = bufferLen;
-			AssociatedVerbs = verbs;
-			//RemainingReadersForCurrentBuffer = ps::Postoffice::Get()->num_workers();
 			WriteBufferIndex = 0;
-			//auto kvLen = bufferLen - sizeof(MetaSlim); // this is a terrible impl;
-			ActualElementCountPaddedForSSE = RoundUp(bufferLen / sizeof(float), INSTRUCTION_VECTOR_SIZE);
-			ActualBufferSizePaddedForSSE = ActualElementCountPaddedForSSE * sizeof(float);
+			ActualElementCountPaddedForSSE = RoundUp((bufferLen / elementWidth), INSTRUCTION_VECTOR_SIZE);
+			ActualBufferSizePaddedForSSE = ActualElementCountPaddedForSSE * elementWidth;
 			Buffer1 = pBuf1;
 			memset(Buffer1, 0, ActualBufferSizePaddedForSSE);
 			Buffer2 = pBuf2;
@@ -76,7 +71,6 @@ namespace ps
 
 			//The first sizeof(MetaSlim) bytes in buf1 and buf2 are not used in RDMA
 			//copy it.
-			CHECK(ps::Postoffice::Get()->num_workers() == numWorkers);
 			ibv_send_wr cleanWr;
 			ibv_sge cleanSge;
 			memset(&cleanSge, 0, sizeof(ibv_sge));
@@ -102,16 +96,6 @@ namespace ps
 				RDMAWorkerSendKVRequests.at(i).imm_data = (ps::Postoffice::Get()->van()->my_node().id << PHUB_MAX_KEY_BITS) | key;
 				RDMAWorkerSendKVRequests.at(i).wr.rdma.remote_addr = rdmaRemoteKVBuffers[i];
 				RDMAWorkerSendKVRequests.at(i).wr.rdma.rkey = verbs->Helper_Server_GetEndpointFromKey(key, i).RemoteKey;
-
-
-				//SendMetaRequests
-				RDMAWorkerSendMetaRequests.at(i).num_sge = 1;
-				RDMAWorkerSendMetaRequests.at(i).sg_list = &RDMAWorkerSendSgesArray[i][0];
-				RDMAWorkerSendMetaRequests.at(i).opcode = IBV_WR_RDMA_WRITE;
-				RDMAWorkerSendMetaRequests.at(i).next = &RDMAWorkerSendKVRequests[i];
-				RDMAWorkerSendMetaRequests.at(i).wr.rdma.remote_addr = (uint64_t)rdmaRemoteMetaBuffers[i];
-				RDMAWorkerSendMetaRequests.at(i).wr.rdma.rkey = verbs->Helper_Server_GetEndpointFromKey(key, i).RemoteKey;
-
 
 				//SendKVSges.
 				RDMAWorkerSendSgesArray[i][1].length = Length - sizeof(MetaSlim);

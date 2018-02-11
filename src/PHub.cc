@@ -461,7 +461,12 @@ void PHub::InitializePHubSpecifics()
 	//now, pull addresses.
 	for (var remote : nodeMap)
 	{
-		
+		var targetName = CxxxxStringFormat("ADDR:%d:%d", remote.first, ID);
+		var addrMap = phubRendezvous->PullMap<uint64_t>(targetName);
+		for (Cntr i = 0; i < keySizes.size(); i++)
+		{
+
+		}
 	}
 }
 
