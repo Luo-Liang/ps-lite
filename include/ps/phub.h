@@ -109,7 +109,7 @@ class PHub
 	PHubAllocator allocator;
 	int ElementWidth;
 	unordered_map<NodeId, int> nodeID2Index;
-	vector<PHub::PHubMergeBuffer> MergeBuffers;
+	vector<PHubMergeBuffer> MergeBuffers;
 public:
 	//global keysizes assuming contiguous keys.
 	//in bytes;

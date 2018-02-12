@@ -433,13 +433,14 @@ void PHub::InitializePHubSpecifics()
 		key2Sock.at(i) = sock;
 	}
 	allocator.Init(keySizes, nodeMap.size(), CxxxxSelect<int, int>(key2Dev, [key2Sock](int x) { return key2Sock.at(x); }), ElementWidth);
+	var mrs = allocator.ReadyRDMA(machineConfig.ib_protection_domains, machineConfig.ib_Device2SocketIdx);
 	phubRendezvous->SynchronousBarrier("PHubAllocator", totalPHubNodes);
-
 
 	//first, create a node to index mapping
 	int index = 0;
 	for (var remote : nodeMap)
 	{
+		if (remote.first == ID) continue;
 		nodeID2Index.at(remote.first) = index;
 		unordered_map<string, uint64_t> addrMap;
 		for (Cntr i = 0; i < keySizes.size(); i++)
@@ -447,8 +448,13 @@ void PHub::InitializePHubSpecifics()
 			var sock = key2Sock.at(i);
 			//create a broadcast map.
 			size_t notUsed;
-			var name = CxxxxStringFormat("%d", i);
+			var name = CxxxxStringFormat("KEY:%d", i);
 			addrMap[name] = (uint64_t)allocator.PHUBReceiveKVBuffer(i, index, sock, notUsed);
+		}
+		for (Cntr i = 0; i < machineConfig.ib_num_devices; i++)
+		{
+			var name = CxxxxStringFormat("RKEY:%d", i);
+			addrMap[name] = mrs.at(i)->rkey;
 		}
 		index++;
 		var mapName = CxxxxStringFormat("ADDR:%d:%d", ID, remote.first);
@@ -461,6 +467,7 @@ void PHub::InitializePHubSpecifics()
 	//now, pull addresses.
 	for (var remote : nodeMap)
 	{
+		if (remote.first == ID) continue;
 		var targetName = CxxxxStringFormat("ADDR:%d:%d", remote.first, ID);
 		var addrMap = phubRendezvous->PullMap<uint64_t>(targetName);
 		for (Cntr i = 0; i < keySizes.size(); i++)

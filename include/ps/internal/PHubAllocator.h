@@ -131,8 +131,35 @@ public:
 			}
 		}
 		//CHECK(StartAddress + AllocationLength == cursor);
+		//register mbrs.
+
 		Initialized = true;
 	}
+
+	vector<ibv_mr*> ReadyRDMA(vector<ibv_pd*>& pPds, vector<int>& pd2Sock)
+	{
+		CHECK(Initialized);
+		if (memoryRegions.size() == 0)
+		{
+			for (Cntr i = 0; i < pPds.size(); i++)
+			{
+				var pd = pPds.at(i);
+				var sock = pd2Sock.at(i);
+				var startAddr = StartAddresses.at(sock);
+				var sz = perSocketBytes.at(sock);
+				ibv_mr * mr = ibv_reg_mr(pd,
+					startAddr, sz,
+					(IBV_ACCESS_LOCAL_WRITE |
+						IBV_ACCESS_REMOTE_WRITE |
+						IBV_ACCESS_REMOTE_READ |
+						IBV_ACCESS_REMOTE_ATOMIC));
+				CHECK(mr != NULL);
+				memoryRegions.push_back(mr);
+			}
+		}
+		return memoryRegions;
+	}
+
 	void* GetStartAddress(int socketIdx, size_t& len)
 	{
 		CHECK(Initialized);
@@ -164,4 +191,5 @@ private:
 	//the ith key in the selected index.
 	vector<int> key2InSocketIdx;
 	std::vector<size_t> perSocketBytes;
+	vector<ibv_mr*> memoryRegions;
 };
