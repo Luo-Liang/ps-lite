@@ -110,6 +110,7 @@ class PHub
 	int ElementWidth;
 	unordered_map<NodeId, int> nodeID2Index;
 	vector<PHubMergeBuffer> MergeBuffers;
+	unordered_map<NodeId, vector<int>> remoteKey2QPIdx;
 public:
 	//global keysizes assuming contiguous keys.
 	//in bytes;

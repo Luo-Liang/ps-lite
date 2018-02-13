@@ -201,7 +201,6 @@ void PHub::InitializePHubSpecifics()
 	//keys should be contiguous.
 	vector<float> qpPayloadSizes;
 	//given a remote and a key, tell me which qp i should data to.
-	unordered_map<NodeId, vector<int>> remoteKey2QPIdx;
 	//pull device information from all remotes.
 	var totalRemoteDevs = 0;
 	for (var item : nodeMap)
@@ -441,6 +440,7 @@ void PHub::InitializePHubSpecifics()
 	for (var remote : nodeMap)
 	{
 		if (remote.first == ID) continue;
+		//populate remote to idx.
 		nodeID2Index.at(remote.first) = index;
 		unordered_map<string, uint64_t> addrMap;
 		for (Cntr i = 0; i < keySizes.size(); i++)
@@ -450,11 +450,9 @@ void PHub::InitializePHubSpecifics()
 			size_t notUsed;
 			var name = CxxxxStringFormat("KEY:%d", i);
 			addrMap[name] = (uint64_t)allocator.PHUBReceiveKVBuffer(i, index, sock, notUsed);
-		}
-		for (Cntr i = 0; i < machineConfig.ib_num_devices; i++)
-		{
-			var name = CxxxxStringFormat("RKEY:%d", i);
-			addrMap[name] = mrs.at(i)->rkey;
+			var rKeyName = CxxxxStringFormat("RKEY:%d", i);
+			var dev = key2Dev.at(i);
+			addrMap[rKeyName] = mrs.at(i)->rkey;
 		}
 		index++;
 		var mapName = CxxxxStringFormat("ADDR:%d:%d", ID, remote.first);
@@ -465,22 +463,70 @@ void PHub::InitializePHubSpecifics()
 	phubRendezvous->SynchronousBarrier("AddressExchange", totalPHubNodes);
 
 	//now, pull addresses.
+	vector<unordered_map<std::string, uint64_t>> remote2AddrMap(nodeID2Index.size());
 	for (var remote : nodeMap)
 	{
 		if (remote.first == ID) continue;
+		//someone to me.
 		var targetName = CxxxxStringFormat("ADDR:%d:%d", remote.first, ID);
-		var addrMap = phubRendezvous->PullMap<uint64_t>(targetName);
-		for (Cntr i = 0; i < keySizes.size(); i++)
-		{
-
-		}
+		remote2AddrMap.at(nodeID2Index.at(remote.first)) = phubRendezvous->PullMap<uint64_t>(targetName);
 	}
+
+	for (Cntr i = 0; i < keySizes.size(); i++)
+	{
+		var sock = key2Sock.at(i);
+		size_t notUsed;
+		var mBuffer1 = allocator.PHUBMergeKVBuffer(i, sock, 0, notUsed);
+		var mBuffer2 = allocator.PHUBMergeKVBuffer(i, sock, 1, notUsed);
+		//get address from all remotes.
+		vector<uint64_t> rdmaRemoteAddrs;
+		vector<int> remoteKeys;
+		for (Cntr node = 0; node < nodeID2Index.size(); node++)
+		{
+			var name = CxxxxStringFormat("KEY:%d", i);
+			rdmaRemoteAddrs.push_back(remote2AddrMap.at(node).at(name));
+			//how do i grab remote keys?
+			var rKeyName = CxxxxStringFormat("RKEY:%d", i);
+			remoteKeys.push_back(remote2AddrMap.at(node).at(rKeyName));
+		}
+		MergeBuffers.at(i).Init(keySizes.at(i), i, (char*)mBuffer1, (char*)mBuffer2, rdmaRemoteAddrs, remoteKeys, ID, ElementWidth);
+	}
+
+	//copy data from init address to merge buffers.
+	for (Cntr i = 0; i < ApplicationSuppliedAddrs.size(); i++)
+	{
+		var addr = MergeBuffers.at(i).GetCurrentReadBuffer();
+		memcpy(addr, ApplicationSuppliedAddrs.at(i), keySizes.at(i));
+	}
+
+
 }
 
 void PHub::Push(PLinkKey key, NodeId destination)
 {
 	//now as if everything is correct.
+	var qpIdx = remoteKey2QPIdx.at(destination).at(key);
 
+	///For non-accurate optimizations, make sure to check the first Sizeof(metaSlim) buffer is not touched.
+	auto& mergeBuffer = MergeBuffers.at(key);
+	auto buffer = MergeBuffers.at(key).GetCurrentReadBuffer();
+	auto destinationIdx = nodeID2Index.at(destination);
+	//o is meta, 1 is kv. 
+	mergeBuffer.RDMAWorkerSendSgesArray.at(destinationIdx).addr = (uint64_t)buffer;
+	auto& ep = Endpoints.at(qpIdx);
+	var CQIndex = ep.CQIdx;
+	auto lkey = allocator.MemoryRegions.at(ep.SocketIdx)->lkey;
+	//use the correct lkeys.
+	//RDMAWorkerSendMetaSges.at(remoteMachine).lkey = RDMAWorkerSendKVSges[remoteMachine].lkey = lkey;
+	//just in case.
+	mergeBuffer.RDMAWorkerSendSgesArray.at(destinationIdx).lkey = lkey;
+	CHECK(remoteQPIdxs.at(remoteMachine) == ep.Index);
+	//auto pMs = (MetaSlim*)RDMAWorkerRecvBufferMetaAddrs.at(remoteMachine);
+	//printf("[PSHUB] Sending Bundled message to QPidx = %d, rid = %d \n", remoteQPIdxs.at(remoteMachine), 9 + remoteMachine * 2);
+	//metadata elision
+	CHECK(msgCnt == 1);
+	//printf("bundle message count = %d\n", msgCnt);
+	AssociatedVerbs->VerbsSmartPost(remoteQPIdxs.at(remoteMachine), CQIndex, msgCnt, &(RDMAWorkerSendMetaRequests.at(remoteMachine)));
 }
 
 void PHub::InitializeDeviceSpecifics()

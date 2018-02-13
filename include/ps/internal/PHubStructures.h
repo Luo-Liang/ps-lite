@@ -29,8 +29,7 @@ public:
 	//ibv_send_wr ReceiveRequestFastAckSendRequest;
 	int Length;
 	int FilledLength;
-	Key KeyVal;
-	Verbs* AssociatedVerbs;
+	PLinkKey KeyVal;
 	bool initialized;
 	int CQIndex = -1;
 	bool PSInitialized;//the first push by rank 0 worker
@@ -47,15 +46,15 @@ public:
 		return initialized;
 	}
 	std::vector<ibv_send_wr> RDMARemoteSendKVRequests;
-	std::vector<int> remoteQPIdxs;
 
 	std::vector<ibv_sge> RDMAWorkerSendSgesArray;
-	void Init(int bufferLen, PLinkKey key,
+	void Init(
+		int bufferLen,
+		PLinkKey key,
 		char* pBuf1,
 		char* pBuf2,
 		std::vector<uint64_t> rdmaRemoteKVBuffers,
 		std::vector<int> rKeys,
-		std::vector<int> qps,
 		NodeId ID,
 		int elementWidth)
 	{
@@ -78,7 +77,6 @@ public:
 		memset(&cleanWr, 0, sizeof(ibv_send_wr));
 		var numRemotes = rdmaRemoteKVBuffers.size();
 		RDMARemoteSendKVRequests.resize(numRemotes, cleanWr);
-		remoteQPIdxs = qps;
 		RDMAWorkerSendSgesArray.resize(numRemotes, cleanSge);
 
 		KeyVal = key;
@@ -106,12 +104,12 @@ public:
 
 	inline int GetKVBufferLen()
 	{
-		return Length - sizeof(MetaSlim);
+		return Length;
 	}
 
 	inline int GetKVBufferLenPaddedForSSE()
 	{
-		return ActualBufferSizePaddedForSSE - sizeof(MetaSlim);
+		return ActualBufferSizePaddedForSSE;
 	}
 
 	inline int GetKVElementCountAccountingForSSEPadding()
@@ -125,7 +123,7 @@ public:
 		auto ret = WriteBufferIndex == 0 ? Buffer1 : Buffer2;
 		//printf("[W]mbuffer b1 = %p, b2 = %p, k = %d\n", Buffer1, Buffer2, KeyVal);
 
-		return ret + sizeof(MetaSlim);
+		return ret;
 	}
 
 	inline char* GetCurrentReadBuffer()
@@ -134,7 +132,7 @@ public:
 		auto ret = WriteBufferIndex == 0 ? Buffer2 : Buffer1;
 		//printf("[r]mbuffer b1 = %p, b2 = %p, k = %d\n", Buffer1, Buffer2, KeyVal);
 
-		return ret + sizeof(MetaSlim);
+		return ret;
 	}
 
 	void AggregationAndOptimizationReady()
@@ -142,28 +140,7 @@ public:
 		WriteBufferIndex = (WriteBufferIndex + 1) & 1;
 	}
 
-	///Cookies injected.
-	///For non-accurate optimizations, make sure to check the first Sizeof(metaSlim) buffer is not touched.
-	void PostSendBufferBundledPushPullAck(int remoteMachine)
-	{
-		auto buffer = GetCurrentReadBuffer();
-		//o is meta, 1 is kv. 
-		RDMAWorkerSendSgesArray[remoteMachine][1].addr = (uint64_t)buffer;
-		auto& ep = AssociatedVerbs->Helper_Server_GetEndpointFromKey(KeyVal, remoteMachine);
-		CQIndex = ep.CQIdx;
-		auto lkey = AssociatedVerbs->DeviceMemoryRegions.at(ep.DeviceIdx)->lkey;
-		//use the correct lkeys.
-		//RDMAWorkerSendMetaSges.at(remoteMachine).lkey = RDMAWorkerSendKVSges[remoteMachine].lkey = lkey;
-		//just in case.
-		RDMAWorkerSendSgesArray.at(remoteMachine).at(0).lkey = RDMAWorkerSendSgesArray.at(remoteMachine).at(1).lkey = lkey;
-		CHECK(remoteQPIdxs.at(remoteMachine) == ep.Index);
-		//auto pMs = (MetaSlim*)RDMAWorkerRecvBufferMetaAddrs.at(remoteMachine);
-	//printf("[PSHUB] Sending Bundled message to QPidx = %d, rid = %d \n", remoteQPIdxs.at(remoteMachine), 9 + remoteMachine * 2);
-		//metadata elision
-		CHECK(msgCnt == 1);
-		//printf("bundle message count = %d\n", msgCnt);
-		AssociatedVerbs->VerbsSmartPost(remoteQPIdxs.at(remoteMachine), CQIndex, msgCnt, &(RDMAWorkerSendMetaRequests.at(remoteMachine)));
-	}
+
 	char* Buffer1;
 	char* Buffer2;
 };

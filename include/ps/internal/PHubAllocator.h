@@ -139,7 +139,7 @@ public:
 	vector<ibv_mr*> ReadyRDMA(vector<ibv_pd*>& pPds, vector<int>& pd2Sock)
 	{
 		CHECK(Initialized);
-		if (memoryRegions.size() == 0)
+		if (MemoryRegions.size() == 0)
 		{
 			for (Cntr i = 0; i < pPds.size(); i++)
 			{
@@ -154,10 +154,10 @@ public:
 						IBV_ACCESS_REMOTE_READ |
 						IBV_ACCESS_REMOTE_ATOMIC));
 				CHECK(mr != NULL);
-				memoryRegions.push_back(mr);
+				MemoryRegions.push_back(mr);
 			}
 		}
-		return memoryRegions;
+		return MemoryRegions;
 	}
 
 	void* GetStartAddress(int socketIdx, size_t& len)
@@ -177,6 +177,8 @@ public:
 		CHECK(PHUBMergeKV.at(socketId).at(0).at(key).first == start);
 		CHECK(PHUBMergeKV.at(socketId).at(0).at(key).second == (size_t)endExclusive - (size_t)start);
 	}
+	//socket to ibv_mr
+	vector<ibv_mr*> MemoryRegions;
 
 private:
 	//socket id -> copy id->key 
@@ -191,5 +193,4 @@ private:
 	//the ith key in the selected index.
 	vector<int> key2InSocketIdx;
 	std::vector<size_t> perSocketBytes;
-	vector<ibv_mr*> memoryRegions;
 };

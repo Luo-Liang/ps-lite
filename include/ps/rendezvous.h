@@ -85,7 +85,7 @@ public:
 	}
 
 	template<class T>
-	unordered_map<string, int> PullMap(string cardId)
+	unordered_map<string, T> PullMap(string cardId)
 	{
 		var reply = redisCommand(pContext, "GET %s", cardId.c_str());
 		CHECK(reply) << pContext->errstr;
