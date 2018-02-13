@@ -99,6 +99,14 @@ struct PHubEndpoint {
 
 class PHub
 {
+	enum CompletionQueueType
+	{
+		Send,
+		Receive
+	};
+	const int CQDepth = 8192;
+	const int SGElement = 2;
+	const int MaxInlineData = 16;
 	shared_ptr<vector<KeyDesc>> pKeyDescs;
 	std::vector<ibv_qp*> QPs;
 	std::vector<ibv_cq*> SCQs;
@@ -111,6 +119,14 @@ class PHub
 	unordered_map<NodeId, int> nodeID2Index;
 	vector<PHubMergeBuffer> MergeBuffers;
 	unordered_map<NodeId, vector<int>> remoteKey2QPIdx;
+	void VerbsSmartPost(int QPIndex, ibv_send_wr* wr);
+	vector<int> QPStats;
+	inline bool UpdateQPCounter(size_t qpIdx, int dec);
+	void PostSend(int remote_rank, ibv_send_wr * wr);
+	inline std::string GetWRSummary(ibv_send_wr* wr);
+	int Poll(int max_entries, int QIndex, CompletionQueueType type, ibv_wc* wc);
+
+
 public:
 	//global keysizes assuming contiguous keys.
 	//in bytes;

@@ -307,9 +307,7 @@ void PHub::InitializePHubSpecifics()
 	//we now have a mapping of how qps map to devices and cores.
 	//we need to broadcast this information.
 	//first, create CQs.
-	const var CQDepth = 8192;
-	const var SGElement = 2;
-	const var MaxInlineData = 16;
+
 	for (Cntr i = 0; i < cqCnt; i++)
 	{
 		var dev = i;
@@ -499,8 +497,157 @@ void PHub::InitializePHubSpecifics()
 		memcpy(addr, ApplicationSuppliedAddrs.at(i), keySizes.at(i));
 	}
 
+	//initialize QP counters
+	QPStats.resize(totalQPCnt, CQDepth - 1);
+
 
 }
+
+inline std::string PHub::GetWRSummary(ibv_send_wr* wr)
+{
+	std::stringstream ss;
+	if (wr == NULL)
+	{
+		return "";
+	}
+	else
+	{
+		ss << "wr->op = " << wr->opcode << ",->key = " << (PHUB_MAX_KEY & wr->imm_data) << ",->next = " << wr->next << " .rdma.addr = " << wr->wr.rdma.remote_addr << " .rkey = " << wr->wr.rdma.rkey;
+		for (size_t i = 0; i < wr->num_sge; i++)
+		{
+			ss << ", wr->sge[" << i << "].length=" << wr->sg_list[i].length << " .lkey=" << wr->sg_list[i].lkey << " .addr=" << wr->sg_list[i].addr;
+		}
+		ss << std::endl;
+		ss << "...additional wr: " << GetWRSummary(wr->next);
+	}
+	return ss.str();
+}
+
+void PHub::PostSend(int index, ibv_send_wr * wr) {
+	ibv_send_wr * bad_wr = nullptr;
+
+	//printf("[%d] attempting to post send wr to endpoint %d ... %s\n", myId, QPIdx, GetWRSummary(wr).c_str());
+
+	int retval = ibv_post_send(QPs.at(index), wr, &bad_wr);
+	if (retval != 0) {
+		printf("[%d] Error posting send wr to endpoint %d failed. wr.op = %d, .next = %p, .key = %d, .dest = %d, %s, Stack = %s\n", ID, index, wr->opcode, wr->next, PHUB_MAX_KEY & wr->imm_data, (wr->imm_data >> PHUB_MAX_KEY_BITS) & PHUB_IMM_SENDER_MASK, GetWRSummary(wr).c_str(), GetStacktraceString().c_str());
+		if (wr->next != NULL)
+		{
+			printf("[%d] Cont' .next.next = %p, .next.op = %d\n", myId, wr->next->next, wr->next->opcode);
+		}
+		perror("Error posting send WR");
+
+		if (bad_wr) {
+			std::cerr << "Error posting send WR at WR " << wr << " (first WR in list was " << bad_wr << ")" << std::endl;
+			printf("[%d] Badwr @ endpoint %d ... badwr.op = %d, .next = %p, .key = %d, .dest = %d. wr summary = %s\n", ID, index, bad_wr->opcode, bad_wr->next, PHUB_MAX_KEY & bad_wr->imm_data, (bad_wr->imm_data >> PHUB_MAX_KEY_BITS) & PHUB_IMM_SENDER_MASK, GetWRSummary(bad_wr).c_str());
+		}
+
+		exit(1);
+	}
+}
+
+inline bool PHub::UpdateQPCounter(size_t qpIdx, int dec)
+{
+	QPStats[qpIdx] -= dec;// dec;
+						  //printf("[%d]QPStats[%d] = %d, deced = %d\n", myId, (int)qpIdx, (int)QPStats[qpIdx], dec);
+						  //the two last messages need to do this.
+	if (QPStats[qpIdx] <= 0)
+	{
+		QPStats[qpIdx] = CQDepth - 1;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+int PHub::Poll(int max_entries, int CQIndex, CompletionQueueType type, ibv_wc* wc) {
+	CHECK(CQIndex < sendCompletionQueues.size() && CQIndex >= 0);
+	int retval = -1;
+	if (type == CompletionQueueType::Send)
+		retval = ibv_poll_cq(sendCompletionQueues[CQIndex], max_entries, wc);
+	else if (type == CompletionQueueType::Receive)
+		retval = ibv_poll_cq(receiveCompletionQueues[CQIndex], max_entries, wc);
+	if (retval < 0) {
+		std::cerr << "Failed polling completion queue with status " << retval << "\n";
+		exit(1);
+	}
+	else if (retval > 0) {
+		if (wc->status == IBV_WC_SUCCESS) {
+			if (wc->opcode == IBV_WC_RDMA_WRITE) {
+#ifdef VERBOSE
+				std::cout << "Got completion for WR ID " << wc.wr_id << std::endl;
+#endif
+			}
+			else if (wc->opcode == IBV_WC_RECV_RDMA_WITH_IMM) {
+#ifdef VERBOSE
+				std::cout << "Got completion for WR ID " << wc.wr_id << " with immediate value " << (void*)((int64_t)wc.imm_data) << std::endl;
+#endif
+			}
+			else {
+#ifdef VERBOSE
+				std::cout << "Got completion for something with id " << ((int64_t)wc.wr_id) << std::endl;
+#endif
+			}
+		}
+		else {
+			printf("[%d][%d] polling Qidx=%d IsSendQ=%d got status %s. SendCompletionQueue.size() = %d RecvCompletionQueue.size() = %d,  StackTrace=%s, wc->wr_id = %d\n", ps::Postoffice::Get()->van()->my_node().id, ps::Postoffice::Get()->van()->my_node().role, CQIndex, type == CompletionQueueType::Send, ibv_wc_status_str(wc->status), sendCompletionQueues.size(), receiveCompletionQueues.size(), GetStacktraceString().c_str(), wc->wr_id);
+			CHECK(false) << " Details to follow: ID = " << ps::Postoffice::Get()->van()->my_node().id << " Send=" << (type == CompletionQueueType::Send) << " Idx=" << CQIndex << " error= " << strerror(errno);
+		}
+	}
+	return retval;
+}
+
+void PHub::VerbsSmartPost(int QPIndex, ibv_send_wr* wr)
+{
+	//post_send uses a spinlock so it's fine to lock for it here.
+	//be aware:: pshub servers do not require locking.
+	wr->wr_id = QPIndex;
+	//std::thread::id this_id = std::this_thread::get_id();
+	//std::cout<<"["<<myId<<"][0] tid = "<<this_id << " no lock? " << SmartPostNoLocking << std::endl;
+	//if true is removed we are pulling more than expected things out.
+	//no metadata is requested.
+	if (UpdateQPCounter(QPIndex, 1))
+	{
+		CHECK(wr->next == NULL);
+		wr->send_flags = IBV_SEND_SIGNALED;
+		//we need to poll then send.
+		//printf("[%d] sending out qpindex = %d, polling cqIdx = %d, wr = %s. ep = %s\n", myId, QPIndex, cqIndex, GetWRSummary(wr).c_str(), GetEndpointSummary(QPIndex).c_str());
+
+		PostSend(QPIndex, wr);
+		//at most 2.
+		/*ibv_wc wc[10];
+		int cnter = 0;
+		while (cnter != messageCnt)
+		{
+		auto current = poll(10, cqIndex, Verbs::Send, wc);
+		if(current > messageCnt)
+		{
+		printf("[%d] error polled %d out, max possible is %d\n", myId, current, messageCnt);
+		}
+		cnter += current;
+		if(cnter > messageCnt)
+		{
+		printf("[%d] error cnter is now %d\n", myId, cnter);
+		}
+		}*/
+		/*        if(myId == 8)*/
+		ibv_wc wc;
+		while (0 == Poll(1, Endpoints.at(QPIndex).CQIdx, CompletionQueueType::Send, &wc));
+		/*        if(myId == 8) */
+		//printf("[%d] send success qp = %s\n", myId, GetEndpointSummary(QPIndex).c_str());
+	}
+	else
+	{
+		wr->send_flags = 0;
+		CHECK(wr->next == NULL);
+		//just send
+		PostSend(QPIndex, wr);
+	}
+	//std::cout<<"["<<myId<<"][1] tid = "<<this_id << " no lock? " << SmartPostNoLocking << std::endl;
+}
+
 
 void PHub::Push(PLinkKey key, NodeId destination)
 {
@@ -520,13 +667,13 @@ void PHub::Push(PLinkKey key, NodeId destination)
 	//RDMAWorkerSendMetaSges.at(remoteMachine).lkey = RDMAWorkerSendKVSges[remoteMachine].lkey = lkey;
 	//just in case.
 	mergeBuffer.RDMAWorkerSendSgesArray.at(destinationIdx).lkey = lkey;
-	CHECK(remoteQPIdxs.at(remoteMachine) == ep.Index);
+	//CHECK(remoteQPIdxs.at(remoteMachine) == ep.Index);
 	//auto pMs = (MetaSlim*)RDMAWorkerRecvBufferMetaAddrs.at(remoteMachine);
 	//printf("[PSHUB] Sending Bundled message to QPidx = %d, rid = %d \n", remoteQPIdxs.at(remoteMachine), 9 + remoteMachine * 2);
 	//metadata elision
-	CHECK(msgCnt == 1);
+	//CHECK(msgCnt == 1);
 	//printf("bundle message count = %d\n", msgCnt);
-	AssociatedVerbs->VerbsSmartPost(remoteQPIdxs.at(remoteMachine), CQIndex, msgCnt, &(RDMAWorkerSendMetaRequests.at(remoteMachine)));
+	//AssociatedVerbs->VerbsSmartPost(remoteQPIdxs.at(remoteMachine), CQIndex, msgCnt, &(RDMAWorkerSendMetaRequests.at(remoteMachine)));
 }
 
 void PHub::InitializeDeviceSpecifics()
