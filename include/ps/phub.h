@@ -133,6 +133,7 @@ class PHub
 	inline bool UpdateQPCounter(size_t qpIdx, int dec);
 	void PostSend(int remote_rank, ibv_send_wr * wr);
 	inline std::string GetWRSummary(ibv_send_wr* wr);
+	inline void PostReceiveRequest(IBReceiveRequest& req);
 	int Poll(int max_entries, int QIndex, CompletionQueueType type, ibv_wc* wc);
 	inline void PostReceive(int QPIdx, ibv_recv_wr * wr);
 	vector<int> UpdatesReceived;

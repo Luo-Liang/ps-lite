@@ -582,19 +582,26 @@ void PHub::InitializePHubSpecifics()
 	//except me.
 	//this is the safest
 	ReceiveRequests.resize(nodeID2Index.size());
-	for (Cntr i = 0; i < nodeID2Index.size(); i++)
+	for (var remote : nodeID2Index)
 	{
-		ReceiveRequests.at(i).resize(keySizes.size());
-		for (Cntr j = 0; j < ReceiveRequests.at(i).size(); j++)
+		var idx = remote.second;
+		ReceiveRequests.at(idx).resize(keySizes.size());
+		for (Cntr j = 0; j < keySizes.size(); j++)
 		{
-			memset(&ReceiveRequests.at(i).at(j).ReceiveRequest, NULL, sizeof(ibv_recv_wr));
+			memset(&ReceiveRequests.at(idx).at(j).ReceiveRequest, NULL, sizeof(ibv_recv_wr));
+			ReceiveRequests.at(idx).at(j).QPIndex = remoteKey2QPIdx.at(remote.first).at(j);
+			//ReceiveRequests.at(idx).at(j).ReceiveRequest.
+			PostReceiveRequest(ReceiveRequests.at(idx).at(j));
 		}
 	}
-
-
-
 	//finalize
 	phubRendezvous->SynchronousBarrier("PostReceiveWorkItems", totalPHubNodes);
+}
+
+inline void PHub::PostReceiveRequest(IBReceiveRequest& req)
+{
+	//because you chose send signaled.
+	PostReceive(req.QPIndex, &req.ReceiveRequest);
 }
 
 inline std::string PHub::GetWRSummary(ibv_send_wr* wr)
@@ -777,7 +784,7 @@ inline void PHub::PostReceive(int QPIdx, ibv_recv_wr * wr) {
 	//printf("[%d][success] attempting to post receive wr to endpoint %d\n", myId, QPIdx);
 }
 
-void PHub::Pull(PLinkKey pkey, NodeId source)
+void PHub::WaitRecv(PLinkKey pkey, NodeId source)
 {
 	//who is going to actually poll this??
 	//any thread can, but it needs to be handled by the dedicated phub thread.
