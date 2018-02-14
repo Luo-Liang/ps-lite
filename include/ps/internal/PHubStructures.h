@@ -149,10 +149,10 @@ struct IBReceiveRequest
 {
 	size_t QPIndex;// __attribute__((aligned(CACHELINE_SIZE_BYTES)));
 	ibv_recv_wr ReceiveRequest;
-	IBReceiveRequest(size_t qpIndex, size_t id)
-	{
-		QPIndex = qpIndex;
-		memset(&ReceiveRequest, 0, sizeof(ibv_recv_wr));
-		ReceiveRequest.wr_id = id;
-	}
+	//IBReceiveRequest(size_t qpIndex, size_t id)
+	//{
+	//	QPIndex = qpIndex;
+	//	memset(&ReceiveRequest, 0, sizeof(ibv_recv_wr));
+	//	ReceiveRequest.wr_id = id;
+	//}
 };

@@ -138,7 +138,8 @@ class PHub
 	vector<int> UpdatesReceived;
 	//remote key ready bit.
 	vector<vector<bool>> ReadyBit;
-	std::vector<IBReceiveRequest> ReceiveRequests;
+	//remote, key
+	std::vector<vector<IBReceiveRequest>> ReceiveRequests;
 
 public:
 	//global keysizes assuming contiguous keys.

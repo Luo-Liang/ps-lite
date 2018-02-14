@@ -578,7 +578,19 @@ void PHub::InitializePHubSpecifics()
 	ReadyBit.resize(nodeID2Index.size(), vector<bool>(keySizes.size(), false));
 
 	//post receive buffers.
-	ReceiveRequests.resize()
+	//i should receive all keys from all workers.
+	//except me.
+	//this is the safest
+	ReceiveRequests.resize(nodeID2Index.size());
+	for (Cntr i = 0; i < nodeID2Index.size(); i++)
+	{
+		ReceiveRequests.at(i).resize(keySizes.size());
+		for (Cntr j = 0; j < ReceiveRequests.at(i).size(); j++)
+		{
+			memset(&ReceiveRequests.at(i).at(j).ReceiveRequest, NULL, sizeof(ibv_recv_wr));
+		}
+	}
+
 
 
 	//finalize
@@ -672,7 +684,7 @@ int PHub::Poll(int max_entries, int CQIndex, CompletionQueueType type, ibv_wc* w
 				std::cout << "Got completion for something with id " << ((int64_t)wc.wr_id) << std::endl;
 #endif
 			}
-		}
+			}
 		else {
 			printf("[%d] polling Qidx=%d IsSendQ=%d got status %s. SendCompletionQueue.size() = %d RecvCompletionQueue.size() = %d,  StackTrace=%s, wc->wr_id = %d\n",
 				ID,
@@ -692,7 +704,7 @@ int PHub::Poll(int max_entries, int CQIndex, CompletionQueueType type, ibv_wc* w
 				<< " error= "
 				<< strerror(errno);
 		}
-	}
+			}
 	return retval;
 }
 
