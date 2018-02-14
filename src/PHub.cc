@@ -195,7 +195,7 @@ void PHub::InitializePHubSpecifics()
 	int totalQPCnt = 0;
 
 	//first, assign keys to devices.
-	var key2Dev = approximateSetPartition(keySizes, machineConfig.ib_num_devices);
+	key2Dev = approximateSetPartition(keySizes, machineConfig.ib_num_devices);
 
 	//now i need to distribute keys equally to these QPs.
 	//keys should be contiguous.
@@ -489,18 +489,93 @@ void PHub::InitializePHubSpecifics()
 		}
 		MergeBuffers.at(i).Init(keySizes.at(i), i, (char*)mBuffer1, (char*)mBuffer2, rdmaRemoteAddrs, remoteKeys, ID, ElementWidth);
 	}
-
 	//copy data from init address to merge buffers.
 	for (Cntr i = 0; i < ApplicationSuppliedAddrs.size(); i++)
 	{
 		var addr = MergeBuffers.at(i).GetCurrentReadBuffer();
 		memcpy(addr, ApplicationSuppliedAddrs.at(i), keySizes.at(i));
 	}
-
 	//initialize QP counters
 	QPStats.resize(totalQPCnt, CQDepth - 1);
+	//now, connect the queue pairs.
+	for (size_t i = 0; i < Endpoints.size(); ++i) {
+		auto devId = Endpoints.at(i).DeviceIdx;
+		CHECK(QPs.at(i) != NULL);
+		ibv_qp_attr attributes;
+		std::memset(&attributes, 0, sizeof(attributes));
+
+		// move to INIT
+		attributes.qp_state = IBV_QPS_INIT;
+		attributes.port_num = machineConfig.ib_ports.at(devId);
+		attributes.pkey_index = 0;
+		attributes.qp_access_flags = 
+			(IBV_ACCESS_LOCAL_WRITE |
+			IBV_ACCESS_REMOTE_WRITE |
+			IBV_ACCESS_REMOTE_READ |
+			IBV_ACCESS_REMOTE_ATOMIC);
+		int retval = ibv_modify_qp(QPs[i], &attributes,
+			IBV_QP_STATE |
+			IBV_QP_PKEY_INDEX |
+			IBV_QP_PORT |
+			IBV_QP_ACCESS_FLAGS);
+		if (retval < 0) {
+			printf("[%d]ibv_modify_qp[%d] phase1 retVal=%d\n", ID, i, retval);
+			perror("Error setting queue pair to INIT");
+			exit(1);
+		}
 
 
+		/// in theory, we need to post an empty receive WR to proceed, but
+		/// when we're doing RDMA-only stuff it seems to work without one.
+
+		// move to RTR
+		std::memset(&attributes, 0, sizeof(attributes));
+		attributes.qp_state = IBV_QPS_RTR;
+		attributes.path_mtu = machineConfig.ib_ports_attribute.at(devId).active_mtu;
+		attributes.dest_qp_num = Endpoints[i].RemoteQPNum;
+		attributes.rq_psn = 0;
+		attributes.max_dest_rd_atomic = max_dest_rd_atomic;
+		attributes.min_rnr_timer = min_rnr_timer;
+		attributes.ah_attr.is_global = 0;
+		attributes.ah_attr.dlid = Endpoints[i].RemoteLid;
+		attributes.ah_attr.sl = 0;
+		attributes.ah_attr.src_path_bits = 0;
+		attributes.ah_attr.port_num = machineConfig.ib_ports.at(devId);
+		retval = ibv_modify_qp(QPs.at(i), &attributes,
+			IBV_QP_STATE |
+			IBV_QP_AV |
+			IBV_QP_PATH_MTU |
+			IBV_QP_DEST_QPN |
+			IBV_QP_RQ_PSN |
+			IBV_QP_MAX_DEST_RD_ATOMIC |
+			IBV_QP_MIN_RNR_TIMER);
+		if (retval < 0) {
+			perror("Error setting queue pair to RTR");
+			exit(1);
+		}
+		//printf("[%d]ibv_modify_qp[%d] phase2\n", thisVan->my_node().id, i);
+		// move to RTS
+		std::memset(&attributes, 0, sizeof(attributes));
+		attributes.qp_state = IBV_QPS_RTS;
+		attributes.timeout = timeout;
+		attributes.retry_cnt = retry_count;
+		attributes.rnr_retry = rnr_retry;
+		attributes.sq_psn = 0;
+		attributes.max_rd_atomic = max_rd_atomic;
+		retval = ibv_modify_qp(QPs.at(i), &attributes,
+			IBV_QP_STATE |
+			IBV_QP_TIMEOUT |
+			IBV_QP_RETRY_CNT |
+			IBV_QP_RNR_RETRY |
+			IBV_QP_SQ_PSN |
+			IBV_QP_MAX_QP_RD_ATOMIC);
+		if (retval < 0) {
+			perror("Error setting queue pair to RTR");
+			exit(1);
+		}
+	}
+
+	ReadyBits.resize(keySizes.size());
 }
 
 inline std::string PHub::GetWRSummary(ibv_send_wr* wr)
@@ -563,12 +638,12 @@ inline bool PHub::UpdateQPCounter(size_t qpIdx, int dec)
 }
 
 int PHub::Poll(int max_entries, int CQIndex, CompletionQueueType type, ibv_wc* wc) {
-	CHECK(CQIndex < sendCompletionQueues.size() && CQIndex >= 0);
+	CHECK(CQIndex < SCQs.size() && CQIndex >= 0);
 	int retval = -1;
 	if (type == CompletionQueueType::Send)
-		retval = ibv_poll_cq(sendCompletionQueues[CQIndex], max_entries, wc);
+		retval = ibv_poll_cq(SCQs[CQIndex], max_entries, wc);
 	else if (type == CompletionQueueType::Receive)
-		retval = ibv_poll_cq(receiveCompletionQueues[CQIndex], max_entries, wc);
+		retval = ibv_poll_cq(RCQs[CQIndex], max_entries, wc);
 	if (retval < 0) {
 		std::cerr << "Failed polling completion queue with status " << retval << "\n";
 		exit(1);
@@ -592,8 +667,23 @@ int PHub::Poll(int max_entries, int CQIndex, CompletionQueueType type, ibv_wc* w
 			}
 		}
 		else {
-			printf("[%d][%d] polling Qidx=%d IsSendQ=%d got status %s. SendCompletionQueue.size() = %d RecvCompletionQueue.size() = %d,  StackTrace=%s, wc->wr_id = %d\n", ps::Postoffice::Get()->van()->my_node().id, ps::Postoffice::Get()->van()->my_node().role, CQIndex, type == CompletionQueueType::Send, ibv_wc_status_str(wc->status), sendCompletionQueues.size(), receiveCompletionQueues.size(), GetStacktraceString().c_str(), wc->wr_id);
-			CHECK(false) << " Details to follow: ID = " << ps::Postoffice::Get()->van()->my_node().id << " Send=" << (type == CompletionQueueType::Send) << " Idx=" << CQIndex << " error= " << strerror(errno);
+			printf("[%d] polling Qidx=%d IsSendQ=%d got status %s. SendCompletionQueue.size() = %d RecvCompletionQueue.size() = %d,  StackTrace=%s, wc->wr_id = %d\n", 
+				ID,
+				CQIndex, 
+				type == CompletionQueueType::Send, 
+				ibv_wc_status_str(wc->status), 
+				SCQs.size(), 
+				RCQs.size(), 
+				GetStacktraceString().c_str(), 
+				wc->wr_id);
+			CHECK(false) << " Details to follow: ID = " 
+				<< ID
+				<< " Send=" 
+				<< (type == CompletionQueueType::Send) 
+				<< " Idx=" 
+				<< CQIndex 
+				<< " error= "
+				<< strerror(errno);
 		}
 	}
 	return retval;
@@ -604,8 +694,6 @@ void PHub::VerbsSmartPost(int QPIndex, ibv_send_wr* wr)
 	//post_send uses a spinlock so it's fine to lock for it here.
 	//be aware:: pshub servers do not require locking.
 	wr->wr_id = QPIndex;
-	//std::thread::id this_id = std::this_thread::get_id();
-	//std::cout<<"["<<myId<<"][0] tid = "<<this_id << " no lock? " << SmartPostNoLocking << std::endl;
 	//if true is removed we are pulling more than expected things out.
 	//no metadata is requested.
 	if (UpdateQPCounter(QPIndex, 1))
@@ -617,26 +705,8 @@ void PHub::VerbsSmartPost(int QPIndex, ibv_send_wr* wr)
 
 		PostSend(QPIndex, wr);
 		//at most 2.
-		/*ibv_wc wc[10];
-		int cnter = 0;
-		while (cnter != messageCnt)
-		{
-		auto current = poll(10, cqIndex, Verbs::Send, wc);
-		if(current > messageCnt)
-		{
-		printf("[%d] error polled %d out, max possible is %d\n", myId, current, messageCnt);
-		}
-		cnter += current;
-		if(cnter > messageCnt)
-		{
-		printf("[%d] error cnter is now %d\n", myId, cnter);
-		}
-		}*/
-		/*        if(myId == 8)*/
 		ibv_wc wc;
 		while (0 == Poll(1, Endpoints.at(QPIndex).CQIdx, CompletionQueueType::Send, &wc));
-		/*        if(myId == 8) */
-		//printf("[%d] send success qp = %s\n", myId, GetEndpointSummary(QPIndex).c_str());
 	}
 	else
 	{
@@ -645,7 +715,6 @@ void PHub::VerbsSmartPost(int QPIndex, ibv_send_wr* wr)
 		//just send
 		PostSend(QPIndex, wr);
 	}
-	//std::cout<<"["<<myId<<"][1] tid = "<<this_id << " no lock? " << SmartPostNoLocking << std::endl;
 }
 
 
@@ -653,7 +722,6 @@ void PHub::Push(PLinkKey key, NodeId destination)
 {
 	//now as if everything is correct.
 	var qpIdx = remoteKey2QPIdx.at(destination).at(key);
-
 	///For non-accurate optimizations, make sure to check the first Sizeof(metaSlim) buffer is not touched.
 	auto& mergeBuffer = MergeBuffers.at(key);
 	auto buffer = MergeBuffers.at(key).GetCurrentReadBuffer();
@@ -667,13 +735,32 @@ void PHub::Push(PLinkKey key, NodeId destination)
 	//RDMAWorkerSendMetaSges.at(remoteMachine).lkey = RDMAWorkerSendKVSges[remoteMachine].lkey = lkey;
 	//just in case.
 	mergeBuffer.RDMAWorkerSendSgesArray.at(destinationIdx).lkey = lkey;
-	//CHECK(remoteQPIdxs.at(remoteMachine) == ep.Index);
-	//auto pMs = (MetaSlim*)RDMAWorkerRecvBufferMetaAddrs.at(remoteMachine);
-	//printf("[PSHUB] Sending Bundled message to QPidx = %d, rid = %d \n", remoteQPIdxs.at(remoteMachine), 9 + remoteMachine * 2);
-	//metadata elision
-	//CHECK(msgCnt == 1);
-	//printf("bundle message count = %d\n", msgCnt);
-	//AssociatedVerbs->VerbsSmartPost(remoteQPIdxs.at(remoteMachine), CQIndex, msgCnt, &(RDMAWorkerSendMetaRequests.at(remoteMachine)));
+	VerbsSmartPost(qpIdx, &mergeBuffer.RDMARemoteSendKVRequests.at(destinationIdx));
+	//determine if you'd like to poll to ensure push is done?
+}
+
+void PHub::Pull(PLinkKey pkey, NodeId source)
+{
+	//who is going to actually poll this??
+	//any thread can, but it needs to be handled by the dedicated phub thread.
+	//or a streamlined plink system thread should pull it??
+	///let's try with the latter first?
+	//this thread is indeed in charge of the key
+	
+	//first, check to see if someone already pulled this for me?
+	if (ReadyBits.at(pkey) == true)
+	{
+		ReadyBits.at(pkey) = false;
+		return;
+	}
+	//which cq does thi key belong to?
+	var cqIdx = key2Dev.at(pkey);
+	const var copies = 5;
+	ibv_wc wcs[copies];
+	var returned = Poll(copies, cqIdx, CompletionQueueType::Receive, wcs);
+	//mark everyone as ready.
+
+
 }
 
 void PHub::InitializeDeviceSpecifics()
@@ -753,9 +840,4 @@ void PHub::InitializeDeviceSpecifics()
 	}
 	//use 1 queue pair for a remote interface.
 
-}
-
-int PHub::Push(NodeId destination, BufferHandle buf)
-{
-	return 0;
 }

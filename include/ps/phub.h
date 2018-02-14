@@ -107,12 +107,21 @@ class PHub
 	const int CQDepth = 8192;
 	const int SGElement = 2;
 	const int MaxInlineData = 16;
+	const int scatter_gather_element_count = 1; // how many SGE's do we allow per operation?
+	const int max_inline_data = 16;             // message rate drops from 6M/s to 4M/s at 29 bytes
+	const int max_dest_rd_atomic = 16;          // how many outstanding reads/atomic ops are allowed? (remote end of qp, limited by card)
+	const int max_rd_atomic = 16;               // how many outstanding reads/atomic ops are allowed? (local end of qp, limited by card)
+	const int min_rnr_timer = 0x12;             // from Mellanox RDMA-Aware Programming manual; probably don't need to touch
+	const int timeout = 0x12;                   // from Mellanox RDMA-Aware Programming manual; probably don't need to touch
+	const int retry_count = 6;                  // from Mellanox RDMA-Aware Programming manual; probably don't need to touch
+	const int rnr_retry = 0;                    // from Mellanox RDMA-Aware Programming manual; probably don't need to touch
 	shared_ptr<vector<KeyDesc>> pKeyDescs;
 	std::vector<ibv_qp*> QPs;
 	std::vector<ibv_cq*> SCQs;
 	std::vector<ibv_cq*> RCQs;
 	int totalPHubNodes;
 	std::vector<PHubEndpoint> Endpoints;
+	vector<int> key2Dev;
 	unordered_map<PLinkKey, unordered_map<NodeId, int>> KeyToQPIdx;
 	PHubAllocator allocator;
 	int ElementWidth;
@@ -125,7 +134,7 @@ class PHub
 	void PostSend(int remote_rank, ibv_send_wr * wr);
 	inline std::string GetWRSummary(ibv_send_wr* wr);
 	int Poll(int max_entries, int QIndex, CompletionQueueType type, ibv_wc* wc);
-
+	vector<bool> ReadyBits;
 
 public:
 	//global keysizes assuming contiguous keys.

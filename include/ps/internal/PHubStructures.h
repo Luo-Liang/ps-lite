@@ -160,7 +160,6 @@ struct IBReceiveRequest
 
 	void PostReceiveRequest()
 	{
-		//printf("[%d]Post Recv Request QPI=%d, ID=%d\n", ps::Postoffice::Get()->van()->my_node().id,  QPIndex,  ReceiveRequest.wr_id);
 		AssociatedVerbs->post_receive(QPIndex, &ReceiveRequest);
 	}
 };
