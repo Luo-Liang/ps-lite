@@ -14,8 +14,11 @@
 #define PHUB_IMM_KEY_MASK PHUB_MAX_KEY
 #define PHUB_IMM_SENDER_MASK ((1<<(32 - PHUB_MAX_KEY_BITS))-1)
 
+#define GET_SENDER_FROM_IMM(x) (( x >> PHUB_MAX_KEY_BITS) & PHUB_IMM_SENDER_MASK)
+#define GET_KEY_FROM_IMM(x) (x & PHUB_IMM_KEY_MASK)
+
 static inline size_t RoundUp(size_t numToRound, size_t multiple)
 {
-    assert(multiple != 0);
-    return ((numToRound + multiple - 1) / multiple) * multiple;
+	assert(multiple != 0);
+	return ((numToRound + multiple - 1) / multiple) * multiple;
 }

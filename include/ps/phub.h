@@ -134,7 +134,11 @@ class PHub
 	void PostSend(int remote_rank, ibv_send_wr * wr);
 	inline std::string GetWRSummary(ibv_send_wr* wr);
 	int Poll(int max_entries, int QIndex, CompletionQueueType type, ibv_wc* wc);
-	vector<bool> ReadyBits;
+	inline void PostReceive(int QPIdx, ibv_recv_wr * wr);
+	vector<int> UpdatesReceived;
+	//remote key ready bit.
+	vector<vector<bool>> ReadyBit;
+	std::vector<IBReceiveRequest> ReceiveRequests;
 
 public:
 	//global keysizes assuming contiguous keys.

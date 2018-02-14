@@ -508,11 +508,11 @@ void PHub::InitializePHubSpecifics()
 		attributes.qp_state = IBV_QPS_INIT;
 		attributes.port_num = machineConfig.ib_ports.at(devId);
 		attributes.pkey_index = 0;
-		attributes.qp_access_flags = 
+		attributes.qp_access_flags =
 			(IBV_ACCESS_LOCAL_WRITE |
-			IBV_ACCESS_REMOTE_WRITE |
-			IBV_ACCESS_REMOTE_READ |
-			IBV_ACCESS_REMOTE_ATOMIC);
+				IBV_ACCESS_REMOTE_WRITE |
+				IBV_ACCESS_REMOTE_READ |
+				IBV_ACCESS_REMOTE_ATOMIC);
 		int retval = ibv_modify_qp(QPs[i], &attributes,
 			IBV_QP_STATE |
 			IBV_QP_PKEY_INDEX |
@@ -574,8 +574,15 @@ void PHub::InitializePHubSpecifics()
 			exit(1);
 		}
 	}
+	//clear ready bits
+	ReadyBit.resize(nodeID2Index.size(), vector<bool>(keySizes.size(), false));
 
-	ReadyBits.resize(keySizes.size());
+	//post receive buffers.
+	ReceiveRequests.resize()
+
+
+	//finalize
+	phubRendezvous->SynchronousBarrier("PostReceiveWorkItems", totalPHubNodes);
 }
 
 inline std::string PHub::GetWRSummary(ibv_send_wr* wr)
@@ -667,21 +674,21 @@ int PHub::Poll(int max_entries, int CQIndex, CompletionQueueType type, ibv_wc* w
 			}
 		}
 		else {
-			printf("[%d] polling Qidx=%d IsSendQ=%d got status %s. SendCompletionQueue.size() = %d RecvCompletionQueue.size() = %d,  StackTrace=%s, wc->wr_id = %d\n", 
+			printf("[%d] polling Qidx=%d IsSendQ=%d got status %s. SendCompletionQueue.size() = %d RecvCompletionQueue.size() = %d,  StackTrace=%s, wc->wr_id = %d\n",
 				ID,
-				CQIndex, 
-				type == CompletionQueueType::Send, 
-				ibv_wc_status_str(wc->status), 
-				SCQs.size(), 
-				RCQs.size(), 
-				GetStacktraceString().c_str(), 
+				CQIndex,
+				type == CompletionQueueType::Send,
+				ibv_wc_status_str(wc->status),
+				SCQs.size(),
+				RCQs.size(),
+				GetStacktraceString().c_str(),
 				wc->wr_id);
-			CHECK(false) << " Details to follow: ID = " 
+			CHECK(false) << " Details to follow: ID = "
 				<< ID
-				<< " Send=" 
-				<< (type == CompletionQueueType::Send) 
-				<< " Idx=" 
-				<< CQIndex 
+				<< " Send="
+				<< (type == CompletionQueueType::Send)
+				<< " Idx="
+				<< CQIndex
 				<< " error= "
 				<< strerror(errno);
 		}
@@ -739,6 +746,25 @@ void PHub::Push(PLinkKey key, NodeId destination)
 	//determine if you'd like to poll to ensure push is done?
 }
 
+inline void PHub::PostReceive(int QPIdx, ibv_recv_wr * wr) {
+	ibv_recv_wr * bad_wr = nullptr;
+	int retval = ibv_post_recv(QPs.at(QPIdx), wr, &bad_wr);
+	if (retval != 0) {
+		//        char buf[500];
+		//print_stacktrace();
+		printf("[%d]Error posting receive WR to endpoint %d. errno = %d. More informatin follows. Stack = %s\n", ID, QPIdx, retval, GetStacktraceString().c_str());
+		perror("Error posting receive");
+		exit(1);
+	}
+	if (bad_wr) {
+		printf("[%d]Error posting receive WR. BadWR = %p, CurrentWR= %p\n", ps::Postoffice::Get()->van()->my_node().id, bad_wr, wr);
+		exit(1);
+
+	}
+
+	//printf("[%d][success] attempting to post receive wr to endpoint %d\n", myId, QPIdx);
+}
+
 void PHub::Pull(PLinkKey pkey, NodeId source)
 {
 	//who is going to actually poll this??
@@ -746,21 +772,32 @@ void PHub::Pull(PLinkKey pkey, NodeId source)
 	//or a streamlined plink system thread should pull it??
 	///let's try with the latter first?
 	//this thread is indeed in charge of the key
-	
+
 	//first, check to see if someone already pulled this for me?
-	if (ReadyBits.at(pkey) == true)
+	if (ReadyBit.at(source).at(pkey) == true)
 	{
-		ReadyBits.at(pkey) = false;
+		ReadyBit.at(source).at(pkey) = false;
 		return;
 	}
-	//which cq does thi key belong to?
+	//which cq does this key belong to?
 	var cqIdx = key2Dev.at(pkey);
 	const var copies = 5;
+	//i expect many keys to be ready at the same time.
+	//poll them out 
 	ibv_wc wcs[copies];
-	var returned = Poll(copies, cqIdx, CompletionQueueType::Receive, wcs);
-	//mark everyone as ready.
-
-
+	bool found = false;
+	while (found == false)
+	{
+		var returned = Poll(copies, cqIdx, CompletionQueueType::Receive, wcs);
+		//mark everyone as ready.
+		for (Cntr i = 0; i < returned; i++)
+		{
+			var sender = GET_SENDER_FROM_IMM(wcs[i].imm_data);
+			var key = GET_KEY_FROM_IMM(wcs[i].imm_data);
+			ReadyBit.at(sender).at(key) = true;
+		}
+		found = ReadyBit.at(source).at(pkey);
+	}
 }
 
 void PHub::InitializeDeviceSpecifics()
