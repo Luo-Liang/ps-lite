@@ -1,30 +1,7 @@
 #pragma once
-#include <vector>
-#include <infiniband/arch.h>
-#include <infiniband/verbs.h>
-#include <unordered_map>
-#include "Schedule.h"
-#include "../dmlc/logging.h"
-#include <gloo/context.h>
-#include <gloo/allreduce_halving_doubling.h>
-#include <gloo/allreduce_ring_chunked.h>
-#include <gloo/transport/ibverbs/device.h>
-#include <gloo/rendezvous/context.h>
-#include <gloo/rendezvous/redis_store.h>
-#include <gloo/algorithm.h>
-#include "internal/ext.h"
-#include "rendezvous.h"
-#include "internal/PHubAllocator.h"
-#include "internal/PHubStructures.h"
 
-using namespace std;
-typedef uint32_t NodeId;
-typedef uint64_t BufferHandle;
-typedef uint32_t PLinkKey;
 
-#define ToBufferHandle(nid, handle) ((BufferHandle)(nid << 32 | handle))
-#define NodeIdFromHandle(handle) ((NodeId)(handle >> 32))
-#define KeyFromHandle(handle) ((PLinkKey)(handle & 0xFFFFFFFF))
+#include "PLink.h"
 
 #define MAX_PHUB_NODES 1000
 
