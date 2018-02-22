@@ -47,3 +47,8 @@ struct PLinkWorkQueue
 	}
 	PLinkContinuation* WorkQueue;
 };
+
+class PLink
+{
+
+};

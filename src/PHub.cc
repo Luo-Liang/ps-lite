@@ -783,8 +783,16 @@ inline void PHub::PostReceive(int QPIdx, ibv_recv_wr * wr) {
 
 	//printf("[%d][success] attempting to post receive wr to endpoint %d\n", myId, QPIdx);
 }
-
-void PHub::WaitRecv(PLinkKey pkey, NodeId source)
+void PHub::PullOnce(PLinkKey pkey, NodeId source)
+{
+	//first, check to see if someone already pulled this for me?
+	if (ReadyBit.at(source).at(pkey) == true)
+	{
+		ReadyBit.at(source).at(pkey) = false;
+		return;
+	}
+}
+void PHub::Pull(PLinkKey pkey, NodeId source)
 {
 	//who is going to actually poll this??
 	//any thread can, but it needs to be handled by the dedicated phub thread.

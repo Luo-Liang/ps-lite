@@ -142,11 +142,11 @@ public:
 	shared_ptr<gloo::rendezvous::RedisStore> pRedisStore = NULL;
 	shared_ptr<gloo::transport::Device> pGlooDefaultDevice = NULL;
 	void InitializeDevice();
-	int Push(NodeId destination, BufferHandle buf);
 	void InitializeDeviceSpecifics();
 	void InitializePHubSpecifics();
 	void Push(PLinkKey pkey, NodeId target);
 	void Pull(PLinkKey pkey, NodeId source);
+	void PullOnce(PLinkKey pkey, NodeId source);
 	void Broadcast(PLinkKey pkey, vector<NodeId>& targets);
 	void Gather(PLinkKey pkey, vector<NodeId>& sources);
 	shared_ptr<vector<KeyDesc>> RetrieveKeyDescs()
