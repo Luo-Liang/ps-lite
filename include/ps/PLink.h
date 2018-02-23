@@ -17,6 +17,7 @@
 #include "internal/PHubAllocator.h"
 #include "internal/PHubStructures.h"
 #include "phub.h"
+#include <thread>
 using namespace std;
 typedef uint32_t NodeId;
 typedef uint64_t BufferHandle;
@@ -56,6 +57,8 @@ class PLinkExecutor
 	//a workqueue
 	shared_ptr<PLinkWorkQueue> wQs;
 	shared_ptr<PHub> pHub;
+	vector<thread> threads;
+	void Execute(int tid);
 public:
 	void Initialize(unordered_map<PLinkKey, Schedule> schedules,
 		string redezvousUri,
