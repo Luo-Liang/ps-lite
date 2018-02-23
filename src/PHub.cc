@@ -5,20 +5,20 @@
 #include "..\include\ps\Schedule.h"
 #include <unordered_set>
 
-PHub::PHub(Schedule operations,
+PHub::PHub(
 	string redezvousUri,
 	unordered_map<NodeId, string> nodeToIP,
 	vector<float>& sizes,
+	vector<void*> applicationSuppliedAddrs,
 	int totalParticipant,
 	int elementWidth,
-	NodeId id)
+	NodeId Id)
 {
 	totalPHubNodes = totalParticipant;
 	ElementWidth = elementWidth;
-	schedule = operations;
 	nodeMap = nodeToIP;
 	//now connect that.
-	ID = id;
+	ID = Id;
 	RendezvousUri = redezvousUri;
 	pKeyDescs = make_shared<vector<KeyDesc>>();
 	keySizes = sizes;
@@ -691,7 +691,7 @@ int PHub::Poll(int max_entries, int CQIndex, CompletionQueueType type, ibv_wc* w
 				std::cout << "Got completion for something with id " << ((int64_t)wc.wr_id) << std::endl;
 #endif
 			}
-			}
+		}
 		else {
 			printf("[%d] polling Qidx=%d IsSendQ=%d got status %s. SendCompletionQueue.size() = %d RecvCompletionQueue.size() = %d,  StackTrace=%s, wc->wr_id = %d\n",
 				ID,
@@ -711,7 +711,7 @@ int PHub::Poll(int max_entries, int CQIndex, CompletionQueueType type, ibv_wc* w
 				<< " error= "
 				<< strerror(errno);
 		}
-			}
+	}
 	return retval;
 }
 
@@ -783,16 +783,18 @@ inline void PHub::PostReceive(int QPIdx, ibv_recv_wr * wr) {
 
 	//printf("[%d][success] attempting to post receive wr to endpoint %d\n", myId, QPIdx);
 }
-void PHub::PullOnce(PLinkKey pkey, NodeId source)
+//returns true if the desired key is already received from the source.
+bool PHub::TryPull(PLinkKey pkey, NodeId source)
 {
-	//first, check to see if someone already pulled this for me?
-	if (ReadyBit.at(source).at(pkey) == true)
-	{
-		ReadyBit.at(source).at(pkey) = false;
-		return;
-	}
+	return InternalPull(pkey, source, false);
+
 }
 void PHub::Pull(PLinkKey pkey, NodeId source)
+{
+	InternalPull(pkey, source, true);
+}
+
+bool PHub::InternalPull(PLinkKey pkey, NodeId source, bool ensurePullSuccess)
 {
 	//who is going to actually poll this??
 	//any thread can, but it needs to be handled by the dedicated phub thread.
@@ -824,7 +826,12 @@ void PHub::Pull(PLinkKey pkey, NodeId source)
 			ReadyBit.at(sender).at(key) = true;
 		}
 		found = ReadyBit.at(source).at(pkey);
+		if (ensurePullSuccess == false)
+		{
+			break;
+		}
 	}
+	return found;
 }
 
 void PHub::InitializeDeviceSpecifics()
@@ -903,5 +910,4 @@ void PHub::InitializeDeviceSpecifics()
 
 	}
 	//use 1 queue pair for a remote interface.
-
 }

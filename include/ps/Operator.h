@@ -8,7 +8,11 @@ template <class T>
 class PHubOptimizer;
 class PHubBroadcast;
 
-typedef int OperatorHandle;
+enum OperationStatus
+{
+	Finished,
+	QueuedForExecution
+};
 using namespace std;
 enum OperatorType
 {
@@ -20,7 +24,7 @@ enum OperatorType
 class IOperator
 {
 public:
-	virtual OperatorHandle Run() = 0;
+	virtual OperationStatus Run() = 0;
 	string Name;
 	OperatorType Type;
 	int Sequence = -1;
@@ -48,7 +52,7 @@ public:
 		//CHECK(std::adjacent_find(pctx->inputLens.begin(), pctx->inputLens.end(), std::not_equal_to<int>()) == pctx->inputLens.end()) << "lens of elements are different!";
 	}
 
-	virtual OperatorHandle Run() override
+	virtual OperationStatus Run() override
 	{
 		CHECK(Initialized);
 		reducer->run();

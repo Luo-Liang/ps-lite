@@ -118,7 +118,7 @@ class PHub
 	vector<vector<bool>> ReadyBit;
 	//remote, key
 	std::vector<vector<IBReceiveRequest>> ReceiveRequests;
-
+	bool InternalPull(PLinkKey key, NodeId source, bool ensurePullSuccess);
 public:
 	//global keysizes assuming contiguous keys.
 	//in bytes;
@@ -127,8 +127,7 @@ public:
 	MachineConfigDescriptor machineConfig;
 	//my global ID
 	NodeId ID;
-	PHub(Schedule schedule, 
-		string redezvousUri,
+	PHub(string redezvousUri,
 		unordered_map<NodeId, string> nodeToIP,
 		vector<float>& sizes,
 		vector<void*> applicationSuppliedAddrs,
@@ -146,7 +145,7 @@ public:
 	void InitializePHubSpecifics();
 	void Push(PLinkKey pkey, NodeId target);
 	void Pull(PLinkKey pkey, NodeId source);
-	void PullOnce(PLinkKey pkey, NodeId source);
+	bool TryPull(PLinkKey pkey, NodeId source);
 	void Broadcast(PLinkKey pkey, vector<NodeId>& targets);
 	void Gather(PLinkKey pkey, vector<NodeId>& sources);
 	shared_ptr<vector<KeyDesc>> RetrieveKeyDescs()

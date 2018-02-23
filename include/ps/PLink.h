@@ -16,6 +16,7 @@
 #include "rendezvous.h"
 #include "internal/PHubAllocator.h"
 #include "internal/PHubStructures.h"
+#include "phub.h"
 using namespace std;
 typedef uint32_t NodeId;
 typedef uint64_t BufferHandle;
@@ -48,7 +49,20 @@ struct PLinkWorkQueue
 	PLinkContinuation* WorkQueue;
 };
 
-class PLink
+class PLinkExecutor
 {
-
+	//a phub
+	//a set of gloo algorithms
+	//a workqueue
+	shared_ptr<PLinkWorkQueue> wQs;
+	shared_ptr<PHub> pHub;
+public:
+	void Initialize(unordered_map<PLinkKey, Schedule> schedules,
+		string redezvousUri,
+		unordered_map<NodeId, string> nodeToIP,
+		vector<float>& sizes,
+		vector<void*> applicationSuppliedAddrs,
+		int totalParticipant,
+		int elementWidth,
+		NodeId Id);
 };
