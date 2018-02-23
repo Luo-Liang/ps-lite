@@ -3,36 +3,51 @@
 #include <ps/phub.h>
 #include <infiniband/arch.h>
 #include <infiniband/verbs.h>
-
+using namespace std;
 class PHubBroadcast : IOperator
 {
 	bool isReceiver = true;
 	shared_ptr<PHub> pPhub = NULL;
-	vector<vector<PLinkKey>> qpIdx2KeysIdx;
 	PLinkKey key;
 	size_t keySize;
-	//cannot afford to create queue pairs for each broadcast opeartor.
-	//reuse some of the queue pairs.
-	static unordered_map<NodeId, int> node2QPNumber;
+	OperatorContext* opContext;
 public:
-	NodeId MyID;
 	virtual void Initialize(OperatorContext* context) override
 	{
-
+		pPhub = static_pointer_cast<PHub>(context->additionalContext);
+		//am i a sender or a receiver
+		//isReceiver = context->inputs.size() == 1;
+		isReceiver = context->inputs[0] == pPhub->ID;
+		//target destinations in output
+		opContext = context;
 	}
 
-	virtual OperatorHandle Run() override
+	virtual OperationStatus Run() override
 	{
 		//im i the receiving side?
 		//phub should optimize the broadcast routine.
 		//using a central, dedicated polling from threads.
 		if (isReceiver)
 		{
-
+			//a receiver simply polls.
+			var status = pPhub->TryPull(key, (NodeId)opContext->inputs[0]);
+			if (status)
+			{
+				return OperationStatus::Finished;
+			}
+			else
+			{
+				return OperationStatus::QueuedForExecution;
+			}
 		}
 		else
 		{
-
+			//a sender simply sends.
+			for (var remote : opContext->outputs)
+			{
+				pPhub->Push(key, (NodeId)remote);
+			}
+			return OperationStatus::Finished;
 		}
 
 	}
