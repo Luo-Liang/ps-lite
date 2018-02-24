@@ -116,10 +116,15 @@ class PHub
 	vector<int> UpdatesReceived;
 	//remote key ready bit.
 	vector<vector<bool>> ReadyBit;
+	vector<int> cq2Cores;
 	//remote, key
 	std::vector<vector<IBReceiveRequest>> ReceiveRequests;
 	bool InternalPull(PLinkKey key, NodeId source, bool ensurePullSuccess);
 public:
+	vector<int> RetriveKey2DevMap()
+	{
+		return key2Dev;
+	}
 	//global keysizes assuming contiguous keys.
 	//in bytes;
 	vector<float> keySizes;

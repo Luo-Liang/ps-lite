@@ -54,5 +54,33 @@ void PLinkExecutor::Initialize(
 void PLinkExecutor::Execute(int tid)
 {
 	//this part is relatively easy.
-	
+	var key2Devs = pHub->RetriveKey2DevMap();
+	//figure out which key am i in charge with?
+	vector<int> myKeys; //make a copy
+	for (Cntr i = 0; i < key2Devs.size(); i++)
+	{
+		var core = key2Devs.at(i);
+		if (tid == core)
+		{
+			myKeys.push_back(i);
+		}
+	}
+
+	//scan ready tasks then execute.
+	for (var idx : myKeys)
+	{
+		if (wQs->WorkQueue[idx] != NULL)
+		{
+			var result = wQs->WorkQueue[idx].Op->Run();
+			if (result == OperationStatus::Finished)
+			{
+
+			}
+			else
+			{
+				//requeue.
+			}
+		}
+	}
+
 }

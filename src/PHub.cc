@@ -291,7 +291,7 @@ void PHub::InitializePHubSpecifics()
 	}
 
 	//map cq to cores.
-	vector<int> cq2Cores(cqCnt);
+	cq2Cores.resize(cqCnt);
 	vector<int> socketTicketer(machineConfig.SocketCount);
 	for (Cntr i = 0; i < cqCnt; i++)
 	{
