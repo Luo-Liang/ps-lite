@@ -8,12 +8,13 @@
 class ScheduleNode
 {
 public:
+	shared_ptr<Schedule> Schedule;
 	shared_ptr<OperatorContext> pContext;
 	shared_ptr<IOperator> pOperator;
 	vector<NodeId> RunOn;
 	double EstimatedCost; //? for a local operator the cost is 0.
-	vector<shared_ptr<ScheduleNode>> Upstream;
-	vector<shared_ptr<ScheduleNode>> Downstream;
+	vector<shared_ptr<ScheduleNode*>> Upstream;
+	vector<shared_ptr<ScheduleNode*>> Downstream;
 	uint ID = 0;
 	ScheduleNode(shared_ptr<OperatorContext> s_pContext,
 		shared_ptr<IOperator> s_pOperator)

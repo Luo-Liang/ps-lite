@@ -39,14 +39,7 @@ void PLinkExecutor::Initialize(
 		CPU_ZERO(&cpuset);
 		CPU_SET(cpuid, &cpuset);
 		int rc = pthread_setaffinity_np(threads[i].native_handle(), sizeof(cpu_set_t), &cpuset);
-		if (rc != 0)
-		{
-			CHECK(false);
-		}
-		else
-		{
-			//printf("[PSHUB] mapping thread %d to cpuid %d, in socket = %d\n", i, cpuid, socketId);
-		}
+		CHECK(rc == 0);
 	}
 	wQs = make_shared<PLinkWorkQueue>(sizes.size());
 }
@@ -67,20 +60,34 @@ void PLinkExecutor::Execute(int tid)
 	}
 
 	//scan ready tasks then execute.
-	for (var idx : myKeys)
+	while (gtg == false)
 	{
-		if (wQs->WorkQueue[idx] != NULL)
+		for (var idx : myKeys)
 		{
-			var result = wQs->WorkQueue[idx].Op->Run();
-			if (result == OperationStatus::Finished)
+			if (wQs->WorkQueues[idx] != NULL)
 			{
-
-			}
-			else
-			{
-				//requeue.
+				var result = wQs->WorkQueues[idx]->pOperator->Run();
+				if (result == OperationStatus::Finished)
+				{
+					//flush this,queue my downstream.
+					//it seems true that per key dependency is linear
+					//is there anything else to do?
+					if (wQs->WorkQueues[idx]->Downstream.size() != 0)
+					{
+						//only 1 dependency.
+						CHECK(wQs->WorkQueues[idx]->Downstream.size() == 1);
+						wQs->WorkQueues[idx] = wQs->WorkQueues[idx]->Downstream.front();
+					}
+					else
+					{
+						//nothing to do. set to null.
+						//but who is going to readify the graph?
+						wQs->WorkQueues[idx] = NULL;
+					}
+					//
+				}
+				//tasks that have not finished must not have side-effects:poll again
 			}
 		}
 	}
-
 }

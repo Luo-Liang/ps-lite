@@ -44,10 +44,9 @@ struct PLinkWorkQueue
 	PLinkWorkQueue(int keyCount)
 	{
 		KeyCount = keyCount;
-		WorkQueue = new PLinkContinuation[keyCount];
-		memset(WorkQueue, NULL, sizeof(WorkQueue) * KeyCount);
+		WorkQueues.resize(keyCount);
 	}
-	PLinkContinuation* WorkQueue;
+	vector<shared_ptr<ScheduleNode>> WorkQueues;
 };
 
 class PLinkExecutor
@@ -59,6 +58,7 @@ class PLinkExecutor
 	shared_ptr<PHub> pHub;
 	vector<thread> threads;
 	void Execute(int tid);
+	volatile bool gtg = false;
 public:
 	void Initialize(unordered_map<PLinkKey, Schedule> schedules,
 		string redezvousUri,
@@ -68,4 +68,8 @@ public:
 		int totalParticipant,
 		int elementWidth,
 		NodeId Id);
+	void GTG()
+	{
+		gtg = true;
+	}
 };
