@@ -19,64 +19,12 @@
 #include <fcntl.h>
 #include <signal.h>
 
-/*static int IsDebuggerPresent(void)
-{
-    char buf[1024];
-    int debugger_present = 0;
-
-    int status_fd = open("/proc/self/status", O_RDONLY);
-    if (status_fd == -1)
-        return 0;
-
-    ssize_t num_read = read(status_fd, buf, sizeof(buf)-1);
-
-    if (num_read > 0)
-    {
-        static const char TracerPid[] = "TracerPid:";
-        char *tracer_pid;
-
-        buf[num_read] = 0;
-        tracer_pid    = strstr(buf, TracerPid);
-        if (tracer_pid)
-            debugger_present = !!atoi(tracer_pid + sizeof(TracerPid) - 1);
-    }
-
-    return debugger_present;
-}*/
-namespace dmlc {
-/*!
- * \brief exception class that will be thrown by
- *  default logger if DMLC_LOG_FATAL_THROW == 1
- */
-struct Error : public std::runtime_error {
-  /*!
-   * \brief constructor
-   * \param s the error message
-   */
-  explicit Error(const std::string &s) : std::runtime_error(s) {}
-};
-}  // namespace dmlc
-
 #if defined(_MSC_VER) && _MSC_VER < 1900
 #define noexcept(a)
 #endif
 
-#if DMLC_USE_CXX11
 #define DMLC_THROW_EXCEPTION noexcept(false)
-#else
-#define DMLC_THROW_EXCEPTION
-#endif
 
-#if DMLC_USE_GLOG
-#include <glog/logging.h>
-
-namespace dmlc {
-inline void InitLogging(const char* argv0) {
-  google::InitGoogleLogging(argv0);
-}
-}  // namespace dmlc
-
-#else
 // use a light version of glog
 #include <assert.h>
 #include <iostream>
@@ -97,7 +45,8 @@ static std::string trap()
     while(0)
     {
 	__asm__("");
-    }
+    
+
     return "Turn on infinite loop to allow debugger to be attched.";
 }
 
@@ -106,39 +55,6 @@ static std::string trap()
     if (!(x))							    \
     dmlc::LogMessageFatal(__FILE__, __LINE__).stream() << "Check "  \
 	"failed: " #x <<dmlc::trap()
-#define CHECK_LT(x, y) CHECK((x) < (y))
-#define CHECK_GT(x, y) CHECK((x) > (y))
-#define CHECK_LE(x, y) CHECK((x) <= (y))
-#define CHECK_GE(x, y) CHECK((x) >= (y))
-#define CHECK_EQ(x, y) CHECK((x) == (y))
-#define CHECK_NE(x, y) CHECK((x) != (y))
-#define CHECK_NOTNULL(x) \
-  ((x) == NULL ? dmlc::LogMessageFatal(__FILE__, __LINE__).stream() << "Check  notnull: "  #x << ' ', (x) : (x)) // NOLINT(*)
-// Debug-only checking.
-#ifdef NDEBUG
-#define DCHECK(x) \
-  while (false) CHECK(x)
-#define DCHECK_LT(x, y) \
-  while (false) CHECK((x) < (y))
-#define DCHECK_GT(x, y) \
-  while (false) CHECK((x) > (y))
-#define DCHECK_LE(x, y) \
-  while (false) CHECK((x) <= (y))
-#define DCHECK_GE(x, y) \
-  while (false) CHECK((x) >= (y))
-#define DCHECK_EQ(x, y) \
-  while (false) CHECK((x) == (y))
-#define DCHECK_NE(x, y) \
-  while (false) CHECK((x) != (y))
-#else
-#define DCHECK(x) CHECK(x)
-#define DCHECK_LT(x, y) CHECK((x) < (y))
-#define DCHECK_GT(x, y) CHECK((x) > (y))
-#define DCHECK_LE(x, y) CHECK((x) <= (y))
-#define DCHECK_GE(x, y) CHECK((x) >= (y))
-#define DCHECK_EQ(x, y) CHECK((x) == (y))
-#define DCHECK_NE(x, y) CHECK((x) != (y))
-#endif  // NDEBUG
 
 #define LOG_INFO dmlc::LogMessage(__FILE__, __LINE__)
 #define LOG_ERROR LOG_INFO
