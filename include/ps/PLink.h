@@ -17,6 +17,7 @@
 #include "internal/PHubAllocator.h"
 #include "internal/PHubStructures.h"
 #include "phub.h"
+#include "../dmlc/logging.h"
 #include <thread>
 using namespace std;
 typedef uint32_t NodeId;
@@ -59,6 +60,8 @@ class PLinkExecutor
 	vector<thread> threads;
 	void Execute(int tid);
 	volatile bool gtg = false;
+	void ReadiyGraph();
+	unordered_map<PLinkKey, Schedule> perKeySchedule;
 public:
 	void Initialize(unordered_map<PLinkKey, Schedule> schedules,
 		string redezvousUri,

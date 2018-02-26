@@ -13,8 +13,9 @@ class Rendezvous
 	uint Port;
 	redisContext* pContext;
 	NodeId ID;
+	string prefix;
 public:
-	Rendezvous(string ip, uint port, NodeId myId) : IP(ip), Port(port), ID(myId)
+	Rendezvous(string ip, uint port, NodeId myId, string pref = "PLINK") : IP(ip), Port(port), ID(myId), prefix(pref)
 	{
 
 	}
@@ -36,13 +37,14 @@ public:
 
 	void SynchronousBarrier(std::string name, int participants)
 	{
-		var reply = redisCommand(pContext, "INCR %s", name.c_str());
-		CHECK(reply) << pContext->errstr;
+		var str = CxxxxStringFormat("[Barrier]%s", name.c_str());
+		var reply = redisCommand(pContext, "INCR %s", str.c_str());
+		//CHECK(reply) << pContext->errstr;
 		while (true)
 		{
 			usleep(50000);
 			//try to see how many we have now.
-			reply = redisCommand(pContext, "GET %s", name.c_str());
+			reply = redisCommand(pContext, "GET %s", str.c_str());
 			CHECK(reply) << pContext->errstr;
 			var pReply = (redisReply*)reply;
 			CHECK(pReply->type == REDIS_REPLY_INTEGER);
@@ -59,13 +61,15 @@ public:
 		j["sockets"] = config.SocketCount;
 		j["core2socket"] = config.Core2SocketIdx;
 		j["ibdevice2socket"] = config.ib_Device2SocketIdx;
-		var reply = redisCommand(pContext, "SET mcds%d %s", myId, j.dump().c_str());
+		var name = CxxxxStringFormat("[%s]mcds%d", prefix.c_str(), myId);
+		var reply = redisCommand(pContext, "SET %s %s", name.c_str(), j.dump().c_str());
 		CHECK(reply) << pContext->errstr;
 	}
 
 	MachineConfigDescSlim PullMachineConfig(NodeId myId)
 	{
-		var reply = redisCommand(pContext, "GET mcds%d", myId);
+		var name = CxxxxStringFormat("[%s]mcds%d", prefix.c_str(), myId);
+		var reply = redisCommand(pContext, "GET %s", name.c_str());
 		CHECK(reply) << pContext->errstr;
 		var pRep = (redisReply*)reply;
 		var j = json::parse(pRep->str);
@@ -77,18 +81,20 @@ public:
 	}
 
 	template<class T>
-	void PushMap(string cardId, unordered_map<string, T>& map)
+	void PushMap(string keyName, unordered_map<string, T>& map)
 	{
 		json m(map);
 		var j = m.dump();
-		var reply = redisCommand(pContext, "SET %s %s", cardId.c_str(), j.c_str());
+		var name = CxxxxStringFormat("[%s]%s", prefix.c_str(), keyName.c_str());
+		var reply = redisCommand(pContext, "SET %s %s", name.c_str(), j.c_str());
 		CHECK(reply) << pContext->errstr;
 	}
 
 	template<class T>
-	unordered_map<string, T> PullMap(string cardId)
+	unordered_map<string, T> PullMap(string keyName)
 	{
-		var reply = redisCommand(pContext, "GET %s", cardId.c_str());
+		var name = CxxxxStringFormat("[%s]%s", prefix.c_str(), keyName.c_str());
+		var reply = redisCommand(pContext, "GET %s", name.c_str());
 		CHECK(reply) << pContext->errstr;
 		var pRep = (redisReply*)reply;
 		var j = json::parse(pRep->str);

@@ -26,13 +26,25 @@
 #include <iostream>
 #include <sstream>
 #include <ctime>
+#include "../ps/internal/ext.h"
+#include "../ps/rendezvous.h"
 
 #if defined(_MSC_VER)
 #pragma warning(disable : 4722)
 #endif
-
-inline void InitLogging(const char* argv0) {
+extern std::string LoggingRendezvousIP;
+extern uint LoggingRendezvousPort;
+extern NodeId ID;
+inline void InitLogging(std::string loggingUrl, NodeId id) {
 	// DO NOTHING
+	auto redisVec = CxxxxStringSplit(loggingUrl, ':');
+	assert(redisVec.size() == 2);
+	var redisAddr = redisVec[0];
+	var redisPort = atoi(redisVec[1].c_str());
+	assert(redisPort != -1);
+	LoggingRendezvousIP = redisAddr;
+	LoggingRendezvousPort = redisPort;
+	ID = id;
 }
 
 static std::string trap()
@@ -73,7 +85,6 @@ public:
 private:
 	char buffer_[9];
 };
-
 class LogMessageFatal {
 public:
 	LogMessageFatal(const char* file, int line) {
@@ -93,7 +104,7 @@ public:
 		// also log the message before throw
 
 		//send to redis
-
+		Rendezvous(LoggingRendezvousIP, LoggingRendezvousPort, ID);
 		//everything is dying why do you care
 		raise(SIGTRAP);
 	}
