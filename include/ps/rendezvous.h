@@ -2,7 +2,7 @@
 #include <hiredis/hiredis.h>
 #include <string>
 #include <memory>
-#include "phub.h"
+#include "PLink.h"
 #include <unistd.h>
 #include <json.hpp>
 using namespace std;
@@ -12,8 +12,9 @@ class Rendezvous
 	string IP;
 	uint Port;
 	redisContext* pContext;
+	NodeId ID;
 public:
-	Rendezvous(string ip, uint port) : IP(ip), Port(port)
+	Rendezvous(string ip, uint port, NodeId myId) : IP(ip), Port(port), ID(myId)
 	{
 
 	}
@@ -58,7 +59,7 @@ public:
 		j["sockets"] = config.SocketCount;
 		j["core2socket"] = config.Core2SocketIdx;
 		j["ibdevice2socket"] = config.ib_Device2SocketIdx;
-		var reply = redisCommand(pContext, "SET mcds%d %s", myId,j.dump().c_str());
+		var reply = redisCommand(pContext, "SET mcds%d %s", myId, j.dump().c_str());
 		CHECK(reply) << pContext->errstr;
 	}
 
@@ -93,5 +94,12 @@ public:
 		var j = json::parse(pRep->str);
 		unordered_map<string, T> r = j;
 		return r;
+	}
+
+	void PushCheckViolation(string content)
+	{
+		var reply = redisCommand(pContext, "SET %d_%s_ERROR_STRING", ID, content.c_str());
+		//must not use CHECK here
+		//trust redis to not DIE.
 	}
 };
