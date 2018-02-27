@@ -3,7 +3,16 @@ void PLinkExecutor::ReadiyGraph()
 {
 	//gloo::transport::Device 
 	//I only care about my schedule
-	var mySchedule = schedules.Filter(ID);
+
+	for (var pair : perKeySchedule)
+	{
+		var key = pair.first;
+		var& schedule = pair.second;
+
+		schedule.Components.
+	}
+
+	var mySchedule = 
 
 
 	for (auto& step : mySchedule->Components)

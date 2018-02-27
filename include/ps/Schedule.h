@@ -5,16 +5,21 @@
 #include <memory>
 #include "phub.h"
 //a schedule is simply a graph of operators and its nodes
+class Schedule;
+
 class ScheduleNode
 {
+	friend class Schedule;
+private:
+	int Level = -1;
 public:
 	shared_ptr<Schedule> Schedule;
 	shared_ptr<OperatorContext> pContext;
 	shared_ptr<IOperator> pOperator;
-	vector<NodeId> RunOn;
+	NodeId RunOn;
 	double EstimatedCost; //? for a local operator the cost is 0.
-	vector<shared_ptr<ScheduleNode*>> Upstream;
-	vector<shared_ptr<ScheduleNode*>> Downstream;
+	vector<shared_ptr<ScheduleNode>> Upstream;
+	vector<shared_ptr<ScheduleNode>> Downstream;
 	uint ID = 0;
 	ScheduleNode(shared_ptr<OperatorContext> s_pContext,
 		shared_ptr<IOperator> s_pOperator)
@@ -118,18 +123,42 @@ public:
 	vector<shared_ptr<ScheduleNode>> Components;
 
 	//returns a topoligically sorted schedule that is targeted at NodeId
-	shared_ptr<Schedule> Filter(NodeId currentID)
+	vector<shared_ptr<ScheduleNode>> Filter(NodeId currentID)
 	{
-		std::sort(Components.begin(), Components.end(), comparePtrToNode);
-		var ret = make_shared<Schedule>();
-		for (var ptr : Components)
+		//first, get root.
+		vector<shared_ptr<ScheduleNode>> results;
+		queue<shared_ptr<ScheduleNode>> reachiability;
+		for (var& component : Components)
 		{
-			if (std::find(ptr->RunOn.begin(), ptr->RunOn.end(), currentID) != ptr->RunOn.end())
+			if (component->Upstream.size() == 0)
 			{
-				ret->Components.push_back(ptr);
+				component->Level = 0;
+				reachiability.push(component);
+				if (component->RunOn == currentID)
+				{
+					results.push_back(component);
+				}
 			}
 		}
-		return ret;
+
+		while (reachiability.size() != 0)
+		{
+			var curr = reachiability.front();
+			reachiability.pop();
+			//make sure only one path to a certain node from root, aka forests.
+			for (shared_ptr<ScheduleNode> down : curr->Downstream)
+			{
+				CHECK(down->Level == -1);
+				down->Level = curr->Level + 1;
+				if (down->RunOn == currentID)
+				{
+					results.push_back(down);
+				}
+				reachiability.push(down);
+			}
+		}
+
+		return results;
 	}
 };
 

@@ -51,8 +51,8 @@ class PLinkExecutor
 	void Execute(int tid);
 	volatile bool gtg = false;
 	void ReadiyGraph();
-	unordered_map<PLinkKey, Schedule> perKeySchedule;
-	unordered_map<PLinkKey, vector<ScheduleNode>> currentNodePerKeySchedule;
+	unordered_map<PLinkKey, shared_ptr<Schedule>> perKeySchedule;
+	unordered_map<PLinkKey, vector<shared_ptr<ScheduleNode>>> currentNodePerKeySchedule;
 public:
 	void Initialize(unordered_map<PLinkKey, Schedule> schedules,
 		string redezvousUri,
