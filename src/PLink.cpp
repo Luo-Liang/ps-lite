@@ -4,6 +4,8 @@ void PLinkExecutor::ReadiyGraph()
 	//gloo::transport::Device 
 	//I only care about my schedule
 	var mySchedule = schedules.Filter(ID);
+
+
 	for (auto& step : mySchedule->Components)
 	{
 		var pctx = step->pContext;

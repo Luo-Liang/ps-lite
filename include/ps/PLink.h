@@ -27,16 +27,6 @@ typedef uint32_t PLinkKey;
 #define ToBufferHandle(nid, handle) ((BufferHandle)(nid << 32 | handle))
 #define NodeIdFromHandle(handle) ((NodeId)(handle >> 32))
 #define KeyFromHandle(handle) ((PLinkKey)(handle & 0xFFFFFFFF))
-struct PLinkContinuation
-{
-	//continuation points to a closure.
-	//contains a function. this function is simply a schedule step id in PLink.
-	PLinkKey Key;
-	//TODO: Operator must be non-blocking.
-	//Gloo is now using blocking ops.
-	shared_ptr<IOperator> Op;
-};
-
 struct PLinkWorkQueue
 {
 	//only one pending operation per key or layer is needed
@@ -62,6 +52,7 @@ class PLinkExecutor
 	volatile bool gtg = false;
 	void ReadiyGraph();
 	unordered_map<PLinkKey, Schedule> perKeySchedule;
+	unordered_map<PLinkKey, vector<ScheduleNode>> currentNodePerKeySchedule;
 public:
 	void Initialize(unordered_map<PLinkKey, Schedule> schedules,
 		string redezvousUri,
