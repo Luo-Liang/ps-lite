@@ -57,7 +57,7 @@ static std::string trap()
 	return "Turn on infinite loop to allow debugger to be attched.";
 }
 
-// Always-on checking
+// Always-on checking_
 #define CHECK(x)				\
     if (!(x))							    \
     LogMessageFatal(__FILE__, __LINE__).stream() << "Check "  \

@@ -8,13 +8,18 @@ void PLinkExecutor::ReadiyGraph()
 	{
 		var key = pair.first;
 		var& schedule = pair.second;
+		currentNodePerKeySchedule.at(key) = schedule->Filter(ID);
+		wQs->WorkQueues.at(key) = currentNodePerKeySchedule.at(key).at(0);
 
-		schedule.Components.
+		for (var& step : currentNodePerKeySchedule.at(key))
+		{
+			var pctx = step->pContext;
+			var op = step->pOperator;
+
+		}
 	}
 
-	var mySchedule = 
-
-
+	//now take care of Gloo
 	for (auto& step : mySchedule->Components)
 	{
 		var pctx = step->pContext;
@@ -69,7 +74,7 @@ void PLinkExecutor::ReadiyGraph()
 }
 
 void PLinkExecutor::Initialize(
-	unordered_map<PLinkKey, Schedule> schedules,
+	unordered_map<PLinkKey, shared_ptr<Schedule>> schedules,
 	string redezvousUri,
 	unordered_map<NodeId, string> nodeToIP,
 	vector<float>& sizes,
@@ -78,6 +83,7 @@ void PLinkExecutor::Initialize(
 	int elementWidth,
 	NodeId Id)
 {
+	ID = Id;
 	InitLogging(redezvousUri, Id);
 	pHub = make_shared<PHub>(redezvousUri,
 		nodeToIP,

@@ -31,10 +31,8 @@ struct PLinkWorkQueue
 {
 	//only one pending operation per key or layer is needed
 	//a thread simply scans the keys it is in charge of.
-	int KeyCount;
 	PLinkWorkQueue(int keyCount)
 	{
-		KeyCount = keyCount;
 		WorkQueues.resize(keyCount);
 	}
 	vector<shared_ptr<ScheduleNode>> WorkQueues;
@@ -53,8 +51,9 @@ class PLinkExecutor
 	void ReadiyGraph();
 	unordered_map<PLinkKey, shared_ptr<Schedule>> perKeySchedule;
 	unordered_map<PLinkKey, vector<shared_ptr<ScheduleNode>>> currentNodePerKeySchedule;
+	NodeId ID;
 public:
-	void Initialize(unordered_map<PLinkKey, Schedule> schedules,
+	void Initialize(unordered_map<PLinkKey, shared_ptr<Schedule>> schedules,
 		string redezvousUri,
 		unordered_map<NodeId, string> nodeToIP,
 		vector<float>& sizes,
