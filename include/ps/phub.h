@@ -143,8 +143,7 @@ public:
 
 	vector<void*> ApplicationSuppliedAddrs;
 	shared_ptr<Rendezvous> phubRendezvous = NULL;
-	shared_ptr<gloo::rendezvous::RedisStore> pRedisStore = NULL;
-	shared_ptr<gloo::transport::Device> pGlooDefaultDevice = NULL;
+
 	void InitializeDevice();
 	void InitializeDeviceSpecifics();
 	void InitializePHubSpecifics();

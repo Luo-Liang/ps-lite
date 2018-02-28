@@ -15,10 +15,15 @@ void PLinkExecutor::ReadiyGraph()
 		{
 			var pctx = step->pContext;
 			var op = step->pOperator;
-
+			if (op->Type == OperatorType::GlooCollectiveAlgorithm)
+			{
+				//use the same algorithm if theparticipants ar ethe same.
+				//this step is quite tricky because gloo rendezvous requires sequential initialization
+			}
 		}
 	}
-
+	shared_ptr<gloo::rendezvous::RedisStore> pRedisStore = NULL;
+	shared_ptr<gloo::transport::Device> pGlooDefaultDevice = NULL;
 	//now take care of Gloo
 	for (auto& step : mySchedule->Components)
 	{

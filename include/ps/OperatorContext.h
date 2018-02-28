@@ -10,15 +10,15 @@ public:
 		General,
 		LocallyAvailable
 	};
-	OperatorContext(vector<BufferHandle> in,
-		vector<BufferHandle> out) : Initialized(false)
+	OperatorContext(vector<PLinkKey> in,
+		vector<PLinkKey> out) : Initialized(false)
 	{
 		inputs = in;
 		outputs = out;
 	}
 	bool Initialized;
-	vector<BufferHandle> inputs;
-	vector<BufferHandle> outputs;
+	vector<PLinkKey> inputs;
+	vector<PLinkKey> outputs;
 	shared_ptr<void*> additionalContext = NULL;
 	OperatorContextTypeCode typeCode = OperatorContextTypeCode::General;
 };
