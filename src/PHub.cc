@@ -833,28 +833,3 @@ bool PHub::InternalPull(PLinkKey pkey, NodeId source, bool ensurePullSuccess)
 	}
 	return found;
 }
-
-void PHub::InitializeDeviceSpecifics()
-{
-	CHECK(machineConfig.Initialized);
-	auto redisVec = CxxxxStringSplit(RendezvousUri, ':');
-	CHECK(redisVec.size() == 2);
-	var redisAddr = redisVec[0];
-	var redisPort = atoi(redisVec[1].c_str());
-	CHECK(redisPort != -1);
-	//this is the place to initialize device specific structures, such as ...
-	//queue pairs.
-	//use redis for rendezvous
-	//figure out from schedule who i need to get in touch with
-	pRedisStore = make_shared<gloo::rendezvous::RedisStore>(redisAddr, redisPort);
-	CHECK(machineConfig.ib_device_names.size() > 0);
-	var attribute = gloo::transport::ibverbs::attr();
-	attribute.index = 0;
-	attribute.name = std::string(machineConfig.ib_device_names[0]);
-	attribute.port = machineConfig.ib_ports[0];
-	pGlooDefaultDevice = gloo::transport::ibverbs::CreateDevice(attribute);
-	phubRendezvous = make_shared<Rendezvous>(redisAddr, redisPort);
-	phubRendezvous->Connect();
-	phubRendezvous->SynchronousBarrier("initializeDevice", totalPHubNodes);
-	//use 1 queue pair for a remote interface.
-}

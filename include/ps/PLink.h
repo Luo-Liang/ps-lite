@@ -52,6 +52,7 @@ class PLinkExecutor
 	unordered_map<PLinkKey, shared_ptr<Schedule>> perKeySchedule;
 	unordered_map<PLinkKey, vector<shared_ptr<ScheduleNode>>> currentNodePerKeySchedule;
 	NodeId ID;
+	std::string rendezvousString;
 public:
 	void Initialize(unordered_map<PLinkKey, shared_ptr<Schedule>> schedules,
 		string redezvousUri,

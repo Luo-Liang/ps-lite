@@ -1,6 +1,7 @@
-#pragma once
+﻿#pragma once
 #define var auto
-
+#define OUT 
+#include <assert.h>
 typedef size_t Cntr;
 //returns 2 complement of the index at which the element should be placed on failure.
 //returns the index at which the element present on success.
@@ -104,4 +105,13 @@ std::string CxxxxStringFormat(const char* format, Args... args) {
 	std::string str(buf);
 	delete[] buf;
 	return std::move(str);
+}
+
+void ParseHostPort(std::string combo, OUT std::string& host, OUT uint& port)
+{
+	auto redisVec = CxxxxStringSplit(host, ':');
+	assert(redisVec.size() == 2);
+	host = redisVec[0];
+	port = atoi(redisVec[1].c_str());
+	assert(port != -1);
 }
