@@ -30,7 +30,7 @@ void PLinkExecutor::ReadiyGraph()
 				//use the same algorithm if theparticipants ar ethe same.
 				//this step is quite tricky because gloo rendezvous requires sequential initialization
 				//TODO: make sure Gloo is modified to allow prefix match.
-				std::shared_ptr<gloo::rendezvousString::Context> pContext = std::make_shared<gloo::rendezvousString::Context>(idx, pctx->inputs.size());
+				std::shared_ptr<gloo::rendezvousString::Context> pContext = std::make_shared<gloo::rendezvousString::Context>(idx, pctx->;
 				pctx->additionalContext = pContext;
 				//attempt to connect to this mesh
 				pContext->connectFullMesh(*pRedisStore, pGlooDefaultDevice);

@@ -41,36 +41,55 @@ public:
 		if (desc == "collectivescross2racks")
 		{
 			//assuming 6 machines.
-			//1 2 3,  4 5 6 on different racks.
-			//the schedule uses collectives to synchronize 1 2 3, then 4 5 6, then 1 and 4, then 
-			vector<BufferHandle> n1InOut = { ToBufferHandle(0,0) };
-			auto n1Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n1InOut, n1InOut);
-			auto n1Opt = make_shared<GlooHalvingAndDoubling<float>>();
-			auto n1 = make_shared<ScheduleNode>(n1Ctx, n1Opt);
-			n1->Annotation = (void*)3;
-			n1->RunOn = { 1,2,3 };
-			s.Components.push_back(n1);
+			//1 2 3 4,  5 6 7 8 on different racks.
+			//the schedule uses collectives to synchronize 1 2 3 4, then 5 6 7 8, then 1 and 5, then 
 
-			vector<BufferHandle> n2InOut = { ToBufferHandle(0,0) };
-			auto n2Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n2InOut, n2InOut);
-			auto n2Opt = make_shared<GlooHalvingAndDoubling<float>>();
-			auto n2 = make_shared<ScheduleNode>(n2Ctx, n2Opt);
-			n2->Annotation = (void*)3;
-			n2->RunOn = { 3,4,5 };
-			s.Components.push_back(n2);
+			//first step, collective within a single rack.
+			//these run on 4 nodes.
+			for (int i = 1; i <= 4; i++)
+			{
+				vector<PLinkKey> n1InOut = { 0 };
+				auto n1Ctx = make_shared<GlooContext<float>>(n1InOut, n1InOut, i - 1, 4);
+				auto n1Opt = make_shared<GlooHalvingAndDoubling<float>>();
+				auto n1 = make_shared<ScheduleNode>(n1Ctx, n1Opt);
+				//needs fully expanded nodes. do not abbreviate.
+				n1->RunOn = i;
+				s.Components.push_back(n1);
+			}
 
-			//we now sycnhronize p0 and p3
-			vector<BufferHandle> n3InOut = { ToBufferHandle(0,0),ToBufferHandle(3,0) };
+			//these run on other 4 nodes, 5-8
+			for (int i = 1; i <= 4; i++)
+			{
+				vector<PLinkKey> n2InOut = { 0 };
+				auto n2Ctx = make_shared<GlooContext<float>>(n2InOut, n2InOut, i - 1, 4);
+				auto n2Opt = make_shared<GlooHalvingAndDoubling<float>>();
+				auto n2 = make_shared<ScheduleNode>(n2Ctx, n2Opt);
+				n2->RunOn = i + 4;
+				s.Components.push_back(n2);
+			}
+
+			//we now sycnhronize 1
+			vector<PLinkKey> n3InOut1 = { 0 };
 			//vector<BufferHandle> n3out = { ToBufferHandle(0,0),ToBufferHandle(3,0) };
-			auto n3Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n3InOut, n3InOut);
-			auto n3Opt = make_shared<GlooHalvingAndDoubling<float>>();
-			auto n3 = make_shared<ScheduleNode>(n3Ctx, n3Opt);
-			n3->Annotation = (void*)6;
-			n3->RunOn = { 1,4 };
-			s.Components.push_back(n3);
+			auto n31Ctx = make_shared<GlooContext<float>>(n3InOut1, n3InOut1, 0, 2);
+			auto n31Opt = make_shared<GlooHalvingAndDoubling<float>>();
+			auto n31 = make_shared<ScheduleNode>(n31Ctx, n31Opt);
+			n31->Annotation = (void*)8;
+			n31->RunOn = 1;
+			s.Components.push_back(n31);
+
+			//we now sycnhronize 5.
+			vector<PLinkKey> n3InOut2 = { 0 };
+			//vector<BufferHandle> n3out = { ToBufferHandle(0,0),ToBufferHandle(3,0) };
+			auto n32Ctx = make_shared<GlooContext<float>>(n3InOut2, n3InOut2, 1, 2);
+			auto n32Opt = make_shared<GlooHalvingAndDoubling<float>>();
+			auto n32 = make_shared<ScheduleNode>(n32Ctx, n32Opt);
+			n32->Annotation = (void*)8;
+			n32->RunOn = 5;
+			s.Components.push_back(n32);
 
 			//we now perform an optimization step on p0 and p3
-			vector<BufferHandle> n4InOut = { ToBufferHandle(0,0) };
+			vector<BufferHandle> n4InOut = { 0 };
 			auto n4Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n4InOut, n4InOut);
 			auto n4Opt = make_shared<PHubOptimizer>();
 			auto n4 = make_shared<ScheduleNode>(n4Ctx, n4Opt);

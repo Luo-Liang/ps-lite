@@ -29,7 +29,7 @@
 using namespace gloo;
 using namespace gloo::transport;
 using namespace gloo::transport::ibverbs;
-using namespace gloo::rendezvous;
+using namespace gloo::rendezvousString;
 #if _MSC_VER
 #define rand_r(x) rand()
 #endif
@@ -90,8 +90,8 @@ namespace ps {
 			timestamps.resize(keySize.size());
 			//GoBuffers.resize(keySize.size());
 			LOG(INFO) << my_node().id << " is preparing to redezvous.";
-			pContext = std::make_shared<gloo::rendezvous::Context>(Postoffice::Get()->my_rank(), Postoffice::Get()->num_workers());
-			gloo::rendezvous::RedisStore fileSync("10.1.2.45");
+			pContext = std::make_shared<gloo::rendezvousString::Context>(Postoffice::Get()->my_rank(), Postoffice::Get()->num_workers());
+			gloo::rendezvousString::RedisStore fileSync("10.1.2.45");
 			//printf("[%d] connecting layer %d\n", my_node_.id, i);
 			pContext->connectFullMesh(fileSync, dev);
 			LOG(INFO) << my_node().id << " is connected to the mesh.";
@@ -290,7 +290,7 @@ namespace ps {
 
 		ThreadsafeQueue<Key> FastRecvQ;
 		Optimizer* OPT = NULL;
-		std::shared_ptr<gloo::rendezvous::Context> pContext;
+		std::shared_ptr<gloo::rendezvousString::Context> pContext;
 		bool SuppressOptimizer = false;
 		std::unordered_map<Key, std::vector<float>> WeightBuffers;
 		std::vector<gloo::Algorithm*> Reducers;

@@ -27,8 +27,8 @@ template <class T>
 class LocallyAvailableOperatorContext : public OperatorContext
 {
 public:
-	LocallyAvailableOperatorContext(vector<BufferHandle> in,
-		vector<BufferHandle> out) 
+	LocallyAvailableOperatorContext(vector<PLinkKey> in,
+		vector<PLinkKey> out)
 		: OperatorContext(in, out)
 	{
 		typeCode = OperatorContext::OperatorContextTypeCode::LocallyAvailable;
@@ -36,4 +36,18 @@ public:
 	vector<T*> inputAddrs;
 	size_t lens;
 	vector<T*> outputAddrs;
+};
+
+template <class T>
+class GlooContext : public LocallyAvailableOperatorContext
+{
+public:
+	GlooContext(vector<PLinkKey>& in, vector<PLinkKey>& out, int rank, int size) :
+		LocallyAvailableOperatorContext(in, out)
+	{
+		Rank = rank;
+		Size = size;
+	}
+	int Rank;
+	int Size;
 };
