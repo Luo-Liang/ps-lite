@@ -34,7 +34,7 @@ public:
 	{
 		return std::to_string(Sequence) + ":" + Name;
 	}
-	virtual void Initialize(OperatorContext* context) = 0;
+	virtual void Initialize(shared_ptr<OperatorContext> context) = 0;
 };
 
 template <class T>
@@ -63,7 +63,7 @@ template <class T>
 class GlooHalvingAndDoubling : public GlooAlgorithms<T>
 {
 public:
-	virtual void Initialize(OperatorContext* context) override
+	virtual void Initialize(shared_ptr<OperatorContext> context) override
 	{
 		GlooAlgorithms<T>::Initialize(context);
 		LocallyAvailableOperatorContext<T>* pctx = (LocallyAvailableOperatorContext<T>*)(context);
@@ -75,7 +75,7 @@ template <class T>
 class GlooRingChunked : public GlooAlgorithms<T>
 {
 public:
-	virtual void Initialize(OperatorContext* context) override
+	virtual void Initialize(shared_ptr<OperatorContext> context) override
 	{
 		GlooAlgorithms<T>::Initialize(context);
 		LocallyAvailableOperatorContext<T>* pctx = (LocallyAvailableOperatorContext<T>*)(context);

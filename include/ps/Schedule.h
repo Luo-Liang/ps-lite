@@ -88,48 +88,54 @@ public:
 			n32->RunOn = 5;
 			s.Components.push_back(n32);
 
-			//we now perform an optimization step on p0 and p3
-			vector<BufferHandle> n4InOut = { 0 };
-			auto n4Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n4InOut, n4InOut);
-			auto n4Opt = make_shared<PHubOptimizer>();
-			auto n4 = make_shared<ScheduleNode>(n4Ctx, n4Opt);
-			n4.Annotation = NULL;
-			n4Opt->numAggregated = (size_t)n3->Annotation;
-			n4.RunOn = { 1,4 };
-			s.Components.push_back(n4);
+			//we now perform an optimization step on p1 and p5
+			vector<BufferHandle> n41InOut = { 0 };
+			auto n41Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n41InOut, n41InOut);
+			auto n41Opt = make_shared<PHubOptimizer>();
+			auto n41 = make_shared<ScheduleNode>(n41Ctx, n41Opt);
+			n41->Annotation = NULL;
+			n41Opt->numAggregated = (size_t)n31->Annotation;
+			n41.RunOn = 1;
+			s.Components.push_back(n41);
+
+			//perform optimization step on p5.
+			vector<BufferHandle> n42InOut = { 0 };
+			auto n42Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n42InOut, n42InOut);
+			auto n42Opt = make_shared<PHubOptimizer>();
+			auto n42 = make_shared<ScheduleNode>(n42Ctx, n42Opt);
+			n42->Annotation = NULL;
+			n42Opt->numAggregated = (size_t)n31->Annotation;
+			n42.RunOn = 1;
+			s.Components.push_back(n42);
 
 
-			//now broadcast back to p1 p2
-			vector<BufferHandle> n5In = { ToBufferHandle(0,0) };
-			vector<BufferHandle> n5Out = { ToBufferHandle(1,0), ToBufferHandle(2,0) };
-			auto n5Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n5In, n5Out);
-			auto n5Opt = make_shared<PHubBroadcast>();
-			auto n5 = make_shared<ScheduleNode>(n5Ctx, n5Opt);
-			n5.Annotation = NULL;
-			n5.RunOn = { 1,2,3 };
+			//now broadcast back 2-4, 6-8 from 1 and 5
+			for (int i = 1; i <= 5; i++)
+			{
+				vector<BufferHandle> n51InOut = { 0 };
+				auto n51Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n51InOut, n51InOut);
+				auto n51Opt = make_shared<PHubBroadcast>();
+				n51Opt->SetReciever(i != 1);
+				auto n51 = make_shared<ScheduleNode>(n51Ctx, n51Opt);
+				n51->Annotation = NULL;
+				n51->RunOn = i;
+				s.Components.push_back(n51);
+			}
 
 			//now broadcast back to p5 p6
-			vector<BufferHandle> n6In = { ToBufferHandle(4,0) };
-			vector<BufferHandle> n6Out = { ToBufferHandle(5,0), ToBufferHandle(6,0) };
-			auto n6Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n6In, n6Out);
-			auto n6Opt = make_shared<PHubBroadCast>();
-			auto n6 = make_shared<ScheduleNode>(n6Ctx, n6Opt);
-			n6.Annotation = NULL;
-			n6.RunOn = { 4,5,6 };
-
+			for (int i = 5; i <= 8; i++)
+			{
+				vector<BufferHandle> n52InOut = { 0 };
+				auto n52Ctx = make_shared<LocallyAvailableOperatorContext<float>>(n52InOut, n52InOut);
+				auto n52Opt = make_shared<PHubBroadcast>();
+				n52Opt->SetReciever(i != 5);
+				auto n52 = make_shared<ScheduleNode>(n52Ctx, n52Opt);
+				n52->Annotation = NULL;
+				n52->RunOn = i;
+				s.Components.push_back(n52);
+			}
 			//we are done.
 			//set up dependency.
-
-			n1->Downstream.push_back(n3);
-			n2->Downstream.push_back(n3);
-			n3->Upstream = { n2,n1 };
-			n3->Downstream.push_back(n4);
-			n4->Upstream.push(n3);
-			n4->Downstream = { n5,n6 };
-			n5->Upstream.push_back(n4);
-			n6->Upstream.push_back(n5);
-
-
 		}
 		else if (desc == "hybridcross2racks")
 		{

@@ -10,16 +10,20 @@ class PHubBroadcast : IOperator
 	shared_ptr<PHub> pPhub = NULL;
 	PLinkKey key;
 	size_t keySize;
-	OperatorContext* opContext;
+	shared_ptr<OperatorContext> opContext;
 public:
-	virtual void Initialize(OperatorContext* context) override
+	virtual void Initialize(shared_ptr<OperatorContext> context) override
 	{
 		pPhub = static_pointer_cast<PHub>(context->additionalContext);
 		//am i a sender or a receiver
 		//isReceiver = context->inputs.size() == 1;
-		isReceiver = context->inputs[0] == pPhub->ID;
 		//target destinations in output
 		opContext = context;
+	}
+
+	void SetReciever(bool receiver)
+	{
+		isReceiver = receiver;
 	}
 
 	virtual OperationStatus Run() override

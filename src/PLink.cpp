@@ -6,7 +6,7 @@ void PLinkExecutor::ReadiyGraph()
 	std::string host;
 	uint port;
 	ParseHostPort(rendezvousString, host, port);
-	var pRedisStore = make_shared<gloo::rendezvousString::RedisStore>(host, port);
+	var pRedisStore = make_shared<gloo::rendezvous::RedisStore>(host, port);
 
 	var attribute = gloo::transport::ibverbs::attr();
 	attribute.index = 0;
@@ -25,12 +25,13 @@ void PLinkExecutor::ReadiyGraph()
 		{
 			var pctx = step->pContext;
 			var op = step->pOperator;
+			op->Initialize(pctx);
 			if (op->Type == OperatorType::GlooCollectiveAlgorithm)
 			{
 				//use the same algorithm if theparticipants ar ethe same.
 				//this step is quite tricky because gloo rendezvous requires sequential initialization
 				//TODO: make sure Gloo is modified to allow prefix match.
-				std::shared_ptr<gloo::rendezvousString::Context> pContext = std::make_shared<gloo::rendezvousString::Context>(idx, pctx->;
+				std::shared_ptr<gloo::rendezvous::Context> pContext = std::make_shared<gloo::rendezvous::Context>(idx, (int)step->Annotation);
 				pctx->additionalContext = pContext;
 				//attempt to connect to this mesh
 				pContext->connectFullMesh(*pRedisStore, pGlooDefaultDevice);
