@@ -121,6 +121,10 @@ class PHub
 	std::vector<vector<IBReceiveRequest>> ReceiveRequests;
 	bool InternalPull(PLinkKey key, NodeId source, bool ensurePullSuccess);
 public:
+	PHubAllocator& GetAllocator()
+	{
+		return allocator;
+	}
 	vector<int> RetriveKey2DevMap()
 	{
 		return key2Dev;

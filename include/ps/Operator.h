@@ -4,7 +4,6 @@
 #include <gloo/algorithm.h>
 #include <gloo/allreduce_halving_doubling.h>
 
-template <class T>
 class PHubOptimizer;
 class PHubBroadcast;
 
