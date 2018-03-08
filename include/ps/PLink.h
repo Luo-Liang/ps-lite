@@ -16,8 +16,10 @@
 #include "rendezvous.h"
 #include "internal/PHubAllocator.h"
 #include "internal/PHubStructures.h"
+#include "PHubBroadcast.h"
 #include "phub.h"
 #include "../dmlc/logging.h"
+#include "Operator.h"
 #include <thread>
 using namespace std;
 typedef uint32_t NodeId;

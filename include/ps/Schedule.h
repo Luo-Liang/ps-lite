@@ -3,7 +3,7 @@
 #include "OperatorContext.h"
 #include "internal/ext.h"
 #include <memory>
-#include "phub.h"
+#include "PLink.h"
 //a schedule is simply a graph of operators and its nodes
 class Schedule;
 
@@ -56,6 +56,7 @@ public:
 				n1->RunOn = i;
 				s.Components.push_back(n1);
 			}
+
 
 			//these run on other 4 nodes, 5-8
 			for (int i = 1; i <= 4; i++)

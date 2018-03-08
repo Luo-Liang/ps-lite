@@ -341,7 +341,7 @@ public:
 		opt = make_shared<NAGTTOptimizer>(numAggregated, PHubAllocator::INSTANCE, 0x240, pKeyDescs);
 
 	}
-	virtual void Run()
+	virtual void Run() override
 	{
 		opt->Update(targetKey, weight, grad, len);
 	}

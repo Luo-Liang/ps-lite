@@ -1,4 +1,6 @@
-#include "../include/ps/PLink.h"
+#include <ps/PLink.h>
+#include <ps/OperatorContext.h>
+
 void PLinkExecutor::ReadiyGraph()
 {
 	//gloo::transport::Device 
@@ -31,7 +33,8 @@ void PLinkExecutor::ReadiyGraph()
 				//use the same algorithm if theparticipants ar ethe same.
 				//this step is quite tricky because gloo rendezvous requires sequential initialization
 				//TODO: make sure Gloo is modified to allow prefix match.
-				std::shared_ptr<gloo::rendezvous::Context> pContext = std::make_shared<gloo::rendezvous::Context>(idx, (int)step->Annotation);
+				shared_ptr<GlooContext> gContext = dynamic_pointer_cast<GlooContext>(pctx);
+				std::shared_ptr<gloo::rendezvous::Context> pContext = std::make_shared<gloo::rendezvous::Context>(gContext->Rank, gContext->Size);
 				pctx->additionalContext = pContext;
 				//attempt to connect to this mesh
 				pContext->connectFullMesh(*pRedisStore, pGlooDefaultDevice);
@@ -93,17 +96,21 @@ void PLinkExecutor::Execute(int tid)
 	//this part is relatively easy.
 	var key2Devs = pHub->RetriveKey2DevMap();
 	//figure out which key am i in charge with?
-	vector<int> myKeys; //make a copy
+	vector<PLinkKey> myKeys; //make a copy
+	unordered_map<PLinkKey, int> keyProg;
 	for (Cntr i = 0; i < key2Devs.size(); i++)
 	{
 		var core = key2Devs.at(i);
 		if (tid == core)
 		{
-			myKeys.push_back(i);
+			myKeys.push_back((PLinkKey)i);
+			keyProg[(PLinkKey)i] = 0;
 		}
 	}
 
 	//scan ready tasks then execute.
+	//not really to do with downstream just a linear execution.
+
 	while (gtg == false)
 	{
 		for (var idx : myKeys)
@@ -116,11 +123,13 @@ void PLinkExecutor::Execute(int tid)
 					//flush this,queue my downstream.
 					//it seems true that per key dependency is linear
 					//is there anything else to do?
-					if (wQs->WorkQueues[idx]->Downstream.size() != 0)
+
+					var& seq = keyProg[idx];
+					if (seq <= currentNodePerKeySchedule.at(idx).size() - 1)
 					{
 						//only 1 dependency.
-						CHECK(wQs->WorkQueues[idx]->Downstream.size() == 1);
-						wQs->WorkQueues[idx] = wQs->WorkQueues[idx]->Downstream.front();
+						wQs->WorkQueues[idx] = currentNodePerKeySchedule.at(idx).at(seq + 1);
+						seq++;
 					}
 					else
 					{
