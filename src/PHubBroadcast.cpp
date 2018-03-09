@@ -9,20 +9,19 @@
 void PHubBroadcast::Initialize(shared_ptr<OperatorContext> context)
 {
 	pPhub = dynamic_pointer_cast<PHub>(context->additionalContext);
+	opContext = dynamic_pointer_cast<PHubOperatorContext>(context);
 	//am i a sender or a receiver
-	//isReceiver = context->inputs.size() == 1;
+	//i am a receiver if i am to.
+	CHECK(opContext->From == pPhub->ID || opContext->To == pPhub->ID);
+	CHECK(opContext->From != pPhub->ID || opContext->To != pPhub->ID);
+	isReceiver = opContext->To == pPhub->ID;
 	//target destinations in output
 	opContext = context;
 }
 
-void PHubBroadcast::SetReciever(bool receiver)
-{
-	isReceiver = receiver;
-}
-
 OperationStatus PHubBroadcast::Run()
 {
-	//im i the receiving side?
+	//am i the receiving side?
 	//phub should optimize the broadcast routine.
 	//using a central, dedicated polling from threads.
 	if (isReceiver)

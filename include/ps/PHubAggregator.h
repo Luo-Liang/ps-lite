@@ -8,7 +8,7 @@ class PHubAggregator :IOperator
 	shared_ptr<PHub> pPhub = NULL;
 	PLinkKey key;
 	size_t keySize;
-	shared_ptr<OperatorContext> opContext;
+	shared_ptr<PHubOperatorContext> opContext;
 	shared_ptr<TTAggregator> aggregator;
 	float* source;
 	float* dest;

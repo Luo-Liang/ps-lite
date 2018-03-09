@@ -13,11 +13,6 @@
 #include "consts.h"
 #endif
 
-
-
-
-
-
 class Optimizer
 {
 public:

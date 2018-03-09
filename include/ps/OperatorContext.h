@@ -23,27 +23,36 @@ public:
 	OperatorContextTypeCode typeCode = OperatorContextTypeCode::General;
 };
 
-template <class T>
-class LocallyAvailableOperatorContext : public OperatorContext
+//template <class T>
+//class LocallyAvailableOperatorContext : public OperatorContext
+//{
+//public:
+//	LocallyAvailableOperatorContext(vector<PLinkKey> in,
+//		vector<PLinkKey> out)
+//		: OperatorContext(in, out)
+//	{
+//		typeCode = OperatorContext::OperatorContextTypeCode::LocallyAvailable;
+//	}
+//};
+
+class PHubOperatorContext : public OperatorContext
 {
 public:
-	LocallyAvailableOperatorContext(vector<PLinkKey> in,
-		vector<PLinkKey> out)
-		: OperatorContext(in, out)
+	NodeId From;
+	NodeId To;
+	PHubOperatorContext(vector<PLinkKey>& in, vector<PLinkKey>& out, NodeId from, NodeId to) :
+		OperatorContext(in, out)
 	{
-		typeCode = OperatorContext::OperatorContextTypeCode::LocallyAvailable;
+		From = from;
+		To = to;
 	}
-	vector<T*> inputAddrs;
-	size_t lens;
-	vector<T*> outputAddrs;
 };
 
-template <class T>
-class GlooContext : public LocallyAvailableOperatorContext
+class GlooContext : public OperatorContext
 {
 public:
 	GlooContext(vector<PLinkKey>& in, vector<PLinkKey>& out, int rank, int size) :
-		LocallyAvailableOperatorContext(in, out)
+		OperatorContext(in, out)
 	{
 		Rank = rank;
 		Size = size;

@@ -90,6 +90,7 @@ public:
 void PHubAggregator::Initialize(shared_ptr<OperatorContext> context)
 {
 	pPhub = dynamic_pointer_cast<PHub>(context->additionalContext);
+	opContext = dynamic_pointer_cast<PHubOperatorContext>(context);
 	key = context->inputs.at(0);
 	keySize = pPhub->keySizes.at(key);
 	opContext = context;
@@ -99,7 +100,11 @@ void PHubAggregator::Initialize(shared_ptr<OperatorContext> context)
 	dest = (float*)mBuffer.GetCurrentWriteBuffer();
 	//consult allocator for source.
 	var& allocator = pPhub->GetAllocator();
-	source = 
+	//requires us to know who finished the job!
+	var idx = pPhub->GetNodeIndexFromID(opContext->Remote);
+	var sockId = pPhub->GetSocketAffinityFromKey(key);
+	size_t notUsed;
+	source = (float*)allocator.PHUBReceiveKVBuffer(key, idx, sockId, notUsed);
 }
 
 OperationStatus PHubAggregator::Run()
@@ -107,6 +112,6 @@ OperationStatus PHubAggregator::Run()
 	CHECK(aggregator != NULL);
 	//dest, source, len
 	//need to saveit in the merge buffer's write location.
-	aggregator->VectorVectorAdd( ,keySize, );
+	aggregator->VectorVectorAdd(dest, keySize, source);
 	return OperationStatus::Finished;
 }

@@ -12,9 +12,8 @@ class PHubBroadcast : IOperator
 	shared_ptr<PHub> pPhub = NULL;
 	PLinkKey key;
 	size_t keySize;
-	shared_ptr<OperatorContext> opContext;
+	shared_ptr<PHubOperatorContext> opContext;
 public:
 	virtual void Initialize(shared_ptr<OperatorContext> context) override;
-	void SetReciever(bool receiver);
 	virtual OperationStatus Run() override;
 };
