@@ -7,7 +7,6 @@
 
 struct KeyDesc
 {
-	PLinkKey Key;
 	EndPoint EP;
 };
 //represent one connection of two infiniband or IP nodes
@@ -92,7 +91,6 @@ class PHub
 	const int timeout = 0x12;                   // from Mellanox RDMA-Aware Programming manual; probably don't need to touch
 	const int retry_count = 6;                  // from Mellanox RDMA-Aware Programming manual; probably don't need to touch
 	const int rnr_retry = 0;                    // from Mellanox RDMA-Aware Programming manual; probably don't need to touch
-	shared_ptr<vector<KeyDesc>> pKeyDescs;
 	std::vector<ibv_qp*> QPs;
 	std::vector<ibv_cq*> SCQs;
 	std::vector<ibv_cq*> RCQs;
@@ -149,15 +147,19 @@ public:
 	shared_ptr<Rendezvous> phubRendezvous = NULL;
 
 	void InitializeDevice();
-	void InitializeDeviceSpecifics();
+	//void InitializeDeviceSpecifics();
 	void InitializePHubSpecifics();
 	void Push(PLinkKey pkey, NodeId target);
 	void Pull(PLinkKey pkey, NodeId source);
 	bool TryPull(PLinkKey pkey, NodeId source);
-	void Broadcast(PLinkKey pkey, vector<NodeId>& targets);
-	void Gather(PLinkKey pkey, vector<NodeId>& sources);
-	shared_ptr<vector<KeyDesc>> RetrieveKeyDescs()
+	//void Broadcast(PLinkKey pkey, vector<NodeId>& targets);
+	//void Gather(PLinkKey pkey, vector<NodeId>& sources);
+	int GetSocketAffinityFromKey(PLinkKey key)
 	{
-		return pKeyDescs;
+		return key2Dev.at(key);
+	}
+	PHubMergeBuffer& RetrieveMergeBuffer(PLinkKey key)
+	{
+		return MergeBuffers.at(key);
 	}
 };

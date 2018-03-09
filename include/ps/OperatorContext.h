@@ -19,7 +19,7 @@ public:
 	bool Initialized;
 	vector<PLinkKey> inputs;
 	vector<PLinkKey> outputs;
-	shared_ptr<void*> additionalContext = NULL;
+	shared_ptr<void> additionalContext = NULL;
 	OperatorContextTypeCode typeCode = OperatorContextTypeCode::General;
 };
 

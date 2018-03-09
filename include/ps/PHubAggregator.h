@@ -9,6 +9,9 @@ class PHubAggregator :IOperator
 	PLinkKey key;
 	size_t keySize;
 	shared_ptr<OperatorContext> opContext;
+	shared_ptr<TTAggregator> aggregator;
+	float* source;
+	float* dest;
 public:
 	virtual void Initialize(shared_ptr<OperatorContext> context) override;
 	virtual OperationStatus Run() override;

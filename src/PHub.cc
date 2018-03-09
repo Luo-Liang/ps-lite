@@ -594,6 +594,7 @@ void PHub::InitializePHubSpecifics()
 			PostReceiveRequest(ReceiveRequests.at(idx).at(j));
 		}
 	}
+	//initialize 
 	//finalize
 	phubRendezvous->SynchronousBarrier("PostReceiveWorkItems", totalPHubNodes);
 }

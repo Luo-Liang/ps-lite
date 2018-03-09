@@ -135,7 +135,7 @@ public:
 		return ret;
 	}
 
-	void AggregationAndOptimizationReady()
+	void FlipReadWriteBuffer()
 	{
 		WriteBufferIndex = (WriteBufferIndex + 1) & 1;
 	}

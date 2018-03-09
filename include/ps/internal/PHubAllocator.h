@@ -14,6 +14,7 @@ public:
 
 	void* PHUBMergeKVBuffer(int key, int socketId, int copyIdx, size_t& outLength)
 	{
+		CHECK(copyIdx <= 1 && copyIdx >= 0);
 		CHECK(PHUBMergeKV[socketId][copyIdx][key].first != NULL);
 		outLength = PHUBMergeKV[socketId][copyIdx][key].second;
 		return PHUBMergeKV[socketId][copyIdx][key].first;
