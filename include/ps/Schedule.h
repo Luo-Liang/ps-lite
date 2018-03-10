@@ -33,6 +33,10 @@ class Schedule
 {
 private:
 	bool comparePtrToNode(shared_ptr<ScheduleNode> a, shared_ptr<ScheduleNode> b) { return (a->ID < b->ID); }
+	bool VerifySubschedule(vector<shared_ptr<ScheduleNode>> roots)
+	{
+		//first, verify there is only one connected component for each node
+	}
 
 public:
 	static Schedule DebugGenerateGlobalSchedule(std::string desc)
@@ -149,7 +153,9 @@ public:
 	vector<shared_ptr<ScheduleNode>> Components;
 
 	//returns a topoligically sorted schedule that is targeted at NodeId
-	vector<shared_ptr<ScheduleNode>> Filter(NodeId currentID)
+	//returns the root node.
+	//returns the roots of ONE contiguous subgraph that belongs to currentID.
+	vector<shared_ptr<ScheduleNode>> TrimTo(NodeId currentID)
 	{
 		//first, get root.
 		vector<shared_ptr<ScheduleNode>> results;
@@ -172,20 +178,34 @@ public:
 			var curr = reachiability.front();
 			reachiability.pop();
 			//make sure only one path to a certain node from root, aka forests.
+			vector<shared_ptr<ScheduleNode>> toTrim;
 			for (shared_ptr<ScheduleNode> down : curr->Downstream)
 			{
-				CHECK(down->Level == -1);
+				//safe. previous level must have finsihed before next level start.
 				down->Level = curr->Level + 1;
-				if (down->RunOn == currentID)
+				if (down->RunOn != currentID)
 				{
-					results.push_back(down);
+					//this whole subtree is removed.
+					//this is not necessary if we're dealing with implicit dependency induced from collectives.
+					toTrim.push_back(down);
 				}
 				reachiability.push(down);
 			}
 		}
-
+		//roots are returned.
 		return results;
 	}
+
+	bool VerifyGlobalSchedule()
+	{
+		//basically run a simulated execution and make sure every piece of data 
+		//is aggregated and optimized at the end.
+
+
+
+	}
+
+
 };
 
 
