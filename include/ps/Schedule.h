@@ -49,7 +49,7 @@ public:
 			for (int i = 1; i <= 4; i++)
 			{
 				vector<PLinkKey> n1InOut = { 0 };
-				auto n1Ctx = make_shared<GlooContext<float>>(n1InOut, n1InOut, i - 1, 4);
+				auto n1Ctx = make_shared<GlooContext>(n1InOut, n1InOut, i - 1, 4);
 				auto n1Opt = make_shared<GlooHalvingAndDoubling<float>>();
 				auto n1 = make_shared<ScheduleNode>(n1Ctx, n1Opt);
 				//needs fully expanded nodes. do not abbreviate.
