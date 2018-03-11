@@ -22,6 +22,8 @@ public:
 	vector<shared_ptr<ScheduleNode>> Upstream;
 	vector<shared_ptr<ScheduleNode>> Downstream;
 	uint ID = 0;
+	int UnresolvedDependencies;
+	bool Finished;
 	ScheduleNode(shared_ptr<OperatorContext> s_pContext,
 		shared_ptr<IOperator> s_pOperator)
 	{
@@ -277,11 +279,30 @@ public:
 					}
 				}
 			}
-
+			current->Finished = true;
 			//what are possible next operators?
-
+			//my children, that are ready, should be queued.
+			for (shared_ptr<ScheduleNode> pSN : current->Downstream)
+			{
+				CHECK(pSN->Finished == false);
+				pSN->UnresolvedDependencies -= 1;
+				if (pSN->UnresolvedDependencies == 0)
+				{
+					//queue it!
+					ReadyQ.push(pSN);
+				}
+			}
 		}
 
+		//at the end, make sure everyone has counter = -1 * count.
+		for (var& pair : counter)
+		{
+			if (pair.second != -1 * counter.size())
+			{
+				return false;
+			}
+		}
+		return true;//check done.
 	}
 
 
