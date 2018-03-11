@@ -209,26 +209,34 @@ public:
 	}
 
 
-	bool VerifyGlobalSchedule()
+	bool VerifyGlobalSchedule(string& ResultStr)
 	{
 		//basically run a simulated execution and make sure every piece of data 
 		//is aggregated and optimized at the end for each node.
 
 		unordered_map<NodeId, int> counter;
+		unordered_map<tuple<NodeId, NodeId>, int> viewOn;
 		//each machine must have a root.
 		//send and receive has an implicit dependency edge that is not reflected in the 
-		//dependency graph.
-
-		var roots = Roots();
+		//dependency graph		var roots = Roots();
+		const int UNSET = -1;
 		std::queue<shared_ptr<ScheduleNode>> ReadyQ;
-
+		var roots = Roots();
 		for (var pSN : roots)
 		{
 			counter[pSN->RunOn] = 1;
+			//everyone's view on other people is uninitialized.
+			for (var other : roots)
+			{
+				if (other->RunOn != pSN->RunOn)
+				{
+					viewOn[tuple<NodeId, NodeId>(pSN->RunOn, other->RunOn)] = UNSET;
+				}
+			}
 			ReadyQ.push(pSN);
 		}
 		//everyone's counter starts with 0.
-
+		int optimizationCounts = 0;
 		while (ReadyQ.size() != 0)
 		{
 			var current = ReadyQ.front();
@@ -237,17 +245,34 @@ public:
 			{
 				case OperatorType::PHubOptimizer:
 				{
-					if (counter.at(current->RunOn < 0))
+					if (optimizationCounts != 0)
 					{
 						//optimized too many times.
+						ResultStr = CxxxxStringFormat("Too many optimization counts. NODE=%d", current->RunOn);
 						return false;
 					}
-					counter.at(current->RunOn) *= -1;
+					else if (counter.at(current->RunOn) != counter.size())
+					{
+						ResultStr = CxxxxStringFormat("Current counter is incorrect for optimization. CURRENT=%d, COUNTER=%d, EXPECTED=%d",
+							current->RunOn,
+							counter.at(current->RunOn),
+							counter.size());
+						return false;
+					}
+					optimizationCounts = 1;
 				}
 				case OperatorType::PHubAggregator:
 				{
 					var pContext = dynamic_pointer_cast<PHubOperatorContext>(current->pContext);
-					int cntr = counter.at(pContext->From);
+					var me = current->RunOn;
+					var remote = pContext->From;
+					//my view on remote:
+					var cntr = viewOn.at(tuple<NodeId, NodeId>(me, remote));
+					if (cntr == UNSET)
+					{
+						ResultStr = CxxxxStringFormat("Remote has not initialized the current viewOn. CURRENT=%d, CNTR=%d", current->RunOn, cntr);
+						return false;
+					}
 					counter.at(current->RunOn) += cntr;
 					//add to me.
 				}
@@ -259,7 +284,8 @@ public:
 					var sender = pContext->From;
 					if (isReceiver)
 					{
-						counter.at(pContext->To) = counter.at(sender);
+						//upate view on, not the actual merge buffer --- that's the job of aggregate
+						viewOn.at(tuple<NodeId, NodeId>(pContext->To, pContext->From)) = counter.at(sender);
 					}
 					//if i am a sender, not really need to do anything
 				}
@@ -297,8 +323,9 @@ public:
 		//at the end, make sure everyone has counter = -1 * count.
 		for (var& pair : counter)
 		{
-			if (pair.second != -1 * counter.size())
+			if (pair.second != counter.size() || optimizationCounts != 1)
 			{
+				ResultStr = CxxxxStringFormat("Found incorrect final value. CURRENT=%d, VALUE=%d, EXPECTED=%d", pair.first, pair.second, counter.size());
 				return false;
 			}
 		}
