@@ -15,17 +15,20 @@ enum OperationStatus
 using namespace std;
 enum OperatorType
 {
-	PHubDataMovement,
+	UNSET,
+	PHubBroadcast,
+	PHubAggregator,
+	PHubGather,
+	PHubOptimizer,
 	//this gives the operator context's additional context a gloo context.
 	GlooCollectiveAlgorithm,
-	PHubDataManipulation
 };
 class IOperator
 {
 public:
 	virtual OperationStatus Run() = 0;
 	string Name;
-	OperatorType Type;
+	OperatorType Type = UNSET;
 	int Sequence = -1;
 	bool Participate = false;
 	bool Initialized = false;
@@ -36,42 +39,40 @@ public:
 	virtual void Initialize(shared_ptr<OperatorContext> context) = 0;
 };
 
-template <class T>
 class GlooAlgorithms : IOperator
 {
 	shared_ptr<gloo::Algorithm> reducer = NULL;
 public:
-	virtual void Initialize(OperatorContext* context) override
+	virtual void Initialize(shared_ptr<OperatorContext> context) override
 	{
-		LocallyAvailableOperatorContext<T>* pctx = (LocallyAvailableOperatorContext<T>*)(context);
-		CHECK(pctx->typeCode == OperatorContext::OperatorContextTypeCode::LocallyAvailable);
+		Type = OperatorType::GlooCollectiveAlgorithm;
+		auto pctx = dynamic_pointer_cast<GlooContext>(context);
+		//CHECK(pctx->typeCode == OperatorContext::OperatorContextTypeCode::LocallyAvailable);
 		//check each inpuit lens is identical.
-		CHECK(pctx->inputAddrs.size() > 0);
-		CHECK(pctx->inputAddrs.size() == pctx.inputLens.size());
+		//nothing needs to be done.
 		//CHECK(std::adjacent_find(pctx->inputLens.begin(), pctx->inputLens.end(), std::not_equal_to<int>()) == pctx->inputLens.end()) << "lens of elements are different!";
 	}
 
 	virtual OperationStatus Run() override
 	{
-		CHECK(Initialized);
 		reducer->run();
 	}
 };
 
 template <class T>
-class GlooHalvingAndDoubling : public GlooAlgorithms<T>
+class GlooHalvingAndDoubling : public GlooAlgorithms
 {
 public:
 	virtual void Initialize(shared_ptr<OperatorContext> context) override
 	{
 		GlooAlgorithms<T>::Initialize(context);
-		LocallyAvailableOperatorContext<T>* pctx = (LocallyAvailableOperatorContext<T>*)(context);
+		var pctx = dynamic_pointer_cast<GlooContext>(context);
 		reducer = make_shared<gloo::AllreduceHalvingDoubling<T>>((gloo::Context*)pctx->additionalContext, pctx->inputAddrs, pctx->inputLens.at(0));
 	}
 };
 
 template <class T>
-class GlooRingChunked : public GlooAlgorithms<T>
+class GlooRingChunked : public GlooAlgorithms
 {
 public:
 	virtual void Initialize(shared_ptr<OperatorContext> context) override
@@ -81,4 +82,4 @@ public:
 		reducer = make_shared<gloo::AllreduceRingChunked<T>>((gloo::Context*)pctx->additionalContext, pctx->inputAddrs, pctx->inputLens.at(0));
 	}
 };
- 
+

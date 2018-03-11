@@ -104,7 +104,7 @@ public:
 		// also log the message before throw
 
 		//send to redis
-		Rendezvous(LoggingRendezvousIP, LoggingRendezvousPort, ID);
+		Rendezvous(LoggingRendezvousIP, LoggingRendezvousPort, ID).PushCheckViolation(log_stream_.str());
 		//everything is dying why do you care
 		raise(SIGTRAP);
 	}

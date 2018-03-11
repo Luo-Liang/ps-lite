@@ -81,6 +81,7 @@ std::vector<T> CxxxxSelect(std::vector<P>& in, Selector op)
 	return result;
 }
 
+
 template <class T>
 bool AllEqual(vector<T> elements)
 {
@@ -93,6 +94,8 @@ bool AllEqual(vector<T> elements)
 		return false;
 	}
 }
+
+
 
 template< typename... Args >
 std::string CxxxxStringFormat(const char* format, Args... args) {

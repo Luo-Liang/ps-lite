@@ -242,6 +242,7 @@ public:
 
 void PHubOptimizer::Initialize(shared_ptr<OperatorContext> context)
 {
+	Type = OperatorType::PHubOptimizer;
 	CHECK(context->typeCode == OperatorContext::LocallyAvailable);
 	CHECK(numAggregated > 0);
 	//CHECK(pKeyDescs != NULL);

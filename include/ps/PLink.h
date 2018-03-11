@@ -3,6 +3,7 @@
 #include <infiniband/arch.h>
 #include <infiniband/verbs.h>
 #include <unordered_map>
+#include <ps/internal/ext.h>
 #include "Schedule.h"
 #include "../dmlc/logging.h"
 #include <gloo/context.h>
@@ -21,6 +22,7 @@
 #include "../dmlc/logging.h"
 #include "Operator.h"
 #include <thread>
+#include <dmlc/logging.h>
 using namespace std;
 typedef uint32_t NodeId;
 typedef uint64_t BufferHandle;

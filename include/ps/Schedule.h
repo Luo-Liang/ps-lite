@@ -4,6 +4,7 @@
 #include "internal/ext.h"
 #include <memory>
 #include "PLink.h"
+#include <unordered_set>
 //a schedule is simply a graph of operators and its nodes
 class Schedule;
 
@@ -152,9 +153,17 @@ public:
 	//A list of components that can be scheduled immediately.
 	vector<shared_ptr<ScheduleNode>> Components;
 
+	vector<shared_ptr<ScheduleNode>> Roots()
+	{
+		vector<shared_ptr<ScheduleNode>> results;
+		auto it = std::copy_if(Components.begin(), Components.end(), std::back_inserter(results), [](shared_ptr<ScheduleNode> pSN) {return pSN->UpStream.size() == 0 });
+		return results;
+	}
+
 	//returns a topoligically sorted schedule that is targeted at NodeId
 	//returns the root node.
 	//returns the roots of ONE contiguous subgraph that belongs to currentID.
+	//the connection will be severed
 	vector<shared_ptr<ScheduleNode>> TrimTo(NodeId currentID)
 	{
 		//first, get root.
@@ -188,6 +197,7 @@ public:
 					//this whole subtree is removed.
 					//this is not necessary if we're dealing with implicit dependency induced from collectives.
 					toTrim.push_back(down);
+					CHECK(false) << "what is this";
 				}
 				reachiability.push(down);
 			}
@@ -196,12 +206,81 @@ public:
 		return results;
 	}
 
+
 	bool VerifyGlobalSchedule()
 	{
 		//basically run a simulated execution and make sure every piece of data 
-		//is aggregated and optimized at the end.
+		//is aggregated and optimized at the end for each node.
 
+		unordered_map<NodeId, int> counter;
+		//each machine must have a root.
+		//send and receive has an implicit dependency edge that is not reflected in the 
+		//dependency graph.
 
+		var roots = Roots();
+		std::queue<shared_ptr<ScheduleNode>> ReadyQ;
+
+		for (var pSN : roots)
+		{
+			counter[pSN->RunOn] = 1;
+			ReadyQ.push(pSN);
+		}
+		//everyone's counter starts with 0.
+
+		while (ReadyQ.size() != 0)
+		{
+			var current = ReadyQ.front();
+			ReadyQ.pop();
+			switch (current->pOperator->Type)
+			{
+				case OperatorType::PHubOptimizer:
+				{
+					if (counter.at(current->RunOn < 0))
+					{
+						//optimized too many times.
+						return false;
+					}
+					counter.at(current->RunOn) *= -1;
+				}
+				case OperatorType::PHubAggregator:
+				{
+					var pContext = dynamic_pointer_cast<PHubOperatorContext>(current->pContext);
+					int cntr = counter.at(pContext->From);
+					counter.at(current->RunOn) += cntr;
+					//add to me.
+				}
+				case OperatorType::PHubBroadcast:
+				{
+					//if i am a reciever, my counter is overwritten.
+					var pContext = dynamic_pointer_cast<PHubOperatorContext>(current->pContext);
+					var isReceiver = pContext->To == current->RunOn;
+					var sender = pContext->From;
+					if (isReceiver)
+					{
+						counter.at(pContext->To) = counter.at(sender);
+					}
+					//if i am a sender, not really need to do anything
+				}
+				case OperatorType::GlooCollectiveAlgorithm:
+				{
+					//who are the particpants?
+					//the result is the sum of everyone's counter.
+					var pContext = dynamic_pointer_cast<GlooContext>(current->pContext);
+					for (var id : pContext->Peers)
+					{
+						if (id != current->RunOn)
+						{
+							//only update mine. 
+							//there are many such nodes that will update others' values.
+							counter.at(current->RunOn) += counter.at(id);
+						}
+					}
+				}
+			}
+
+			//what are possible next operators?
+
+		}
 
 	}
 

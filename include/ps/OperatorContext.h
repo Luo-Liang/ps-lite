@@ -59,4 +59,5 @@ public:
 	}
 	int Rank;
 	int Size;
+	vector<NodeId> Peers;
 };

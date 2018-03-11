@@ -89,6 +89,7 @@ public:
 
 void PHubAggregator::Initialize(shared_ptr<OperatorContext> context)
 {
+	Type = OperatorType::PHubOptimizer;
 	pPhub = dynamic_pointer_cast<PHub>(context->additionalContext);
 	opContext = dynamic_pointer_cast<PHubOperatorContext>(context);
 	key = context->inputs.at(0);

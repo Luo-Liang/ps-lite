@@ -8,6 +8,7 @@
 
 void PHubBroadcast::Initialize(shared_ptr<OperatorContext> context)
 {
+	Type = OperatorType::PHubBroadcast;
 	pPhub = dynamic_pointer_cast<PHub>(context->additionalContext);
 	opContext = dynamic_pointer_cast<PHubOperatorContext>(context);
 	//am i a sender or a receiver
