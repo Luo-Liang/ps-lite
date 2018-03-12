@@ -23,6 +23,7 @@
 #include "Operator.h"
 #include <thread>
 #include <dmlc/logging.h>
+#include <queue>
 using namespace std;
 typedef uint32_t NodeId;
 typedef uint64_t BufferHandle;
@@ -35,11 +36,12 @@ struct PLinkWorkQueue
 {
 	//only one pending operation per key or layer is needed
 	//a thread simply scans the keys it is in charge of.
+	//keys are continuous
 	PLinkWorkQueue(int keyCount)
 	{
-		WorkQueues.resize(keyCount);
+
 	}
-	vector<shared_ptr<ScheduleNode>> WorkQueues;
+	unordered_map<PLinkKey, queue<shared_ptr<ScheduleNode>>> WorkQueues;
 };
 
 class PLinkExecutor
@@ -54,7 +56,6 @@ class PLinkExecutor
 	volatile bool gtg = false;
 	void ReadiyGraph();
 	unordered_map<PLinkKey, shared_ptr<Schedule>> perKeySchedule;
-	unordered_map<PLinkKey, vector<shared_ptr<ScheduleNode>>> currentNodePerKeySchedule;
 	NodeId ID;
 	std::string rendezvousString;
 public:

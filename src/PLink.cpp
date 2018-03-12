@@ -20,11 +20,13 @@ void PLinkExecutor::ReadiyGraph()
 	{
 		var key = pair.first;
 		var& schedule = pair.second;
-		currentNodePerKeySchedule.at(key) = schedule->Filter(ID);
-		wQs->WorkQueues.at(key) = currentNodePerKeySchedule.at(key).at(0);
-
-		for (var& step : currentNodePerKeySchedule.at(key))
+		//currentNodePerKeySchedule.at(key) = schedule->TrimTo(ID);
+		var roots = schedule->TrimTo(ID);
+		//just coipy. okay. done only once.
+		wQs->WorkQueues[key] = queue<shared_ptr<ScheduleNode>>(deque<shared_ptr<ScheduleNode>>(roots.begin(), roots.end()));
+		for (var& step : schedule->Components)
 		{
+			if (step->RunOn != ID) continue;
 			var pctx = step->pContext;
 			var op = step->pOperator;
 			op->Initialize(pctx);
@@ -97,14 +99,12 @@ void PLinkExecutor::Execute(int tid)
 	var key2Devs = pHub->RetriveKey2DevMap();
 	//figure out which key am i in charge with?
 	vector<PLinkKey> myKeys; //make a copy
-	unordered_map<PLinkKey, int> keyProg;
 	for (Cntr i = 0; i < key2Devs.size(); i++)
 	{
 		var core = key2Devs.at(i);
 		if (tid == core)
 		{
 			myKeys.push_back((PLinkKey)i);
-			keyProg[(PLinkKey)i] = 0;
 		}
 	}
 
@@ -113,32 +113,39 @@ void PLinkExecutor::Execute(int tid)
 
 	while (gtg == false)
 	{
-		for (var idx : myKeys)
+		for (var key : myKeys)
 		{
-			if (wQs->WorkQueues[idx] != NULL)
+			if (wQs->WorkQueues.at(key).size() != 0)
 			{
-				var result = wQs->WorkQueues[idx]->pOperator->Run();
-				if (result == OperationStatus::Finished)
+				shared_ptr<ScheduleNode> node = wQs->WorkQueues.at(key).front();
+				OperationStatus result = OperationStatus::Untouched;
+				if (node->RunOn != ID)
+				{
+					result = OperationStatus::Skipped;
+				}
+				else
+				{
+					result = node->pOperator->Run();
+				}
+
+				if (result == OperationStatus::Finished || result == OperationStatus::Skipped)
 				{
 					//flush this,queue my downstream.
 					//it seems true that per key dependency is linear
 					//is there anything else to do?
-
-					var& seq = keyProg[idx];
-					if (seq <= currentNodePerKeySchedule.at(idx).size() - 1)
+					//check my downstream.
+					for (var& child : node->Downstream)
 					{
-						//only 1 dependency.
-						wQs->WorkQueues[idx] = currentNodePerKeySchedule.at(idx).at(seq + 1);
-						seq++;
+						child->UnresolvedDependencies -= 1;
+						if (child->UnresolvedDependencies == 0)
+						{
+							//queue it!
+							wQs->WorkQueues.at(key).push(child);
+						}
 					}
-					else
-					{
-						//nothing to do. set to null.
-						//but who is going to readify the graph?
-						wQs->WorkQueues[idx] = NULL;
-					}
-					//
+					wQs->WorkQueues.at(key).pop();
 				}
+				//must be Requeue for execution. just run again.
 				//tasks that have not finished must not have side-effects:poll again
 			}
 		}

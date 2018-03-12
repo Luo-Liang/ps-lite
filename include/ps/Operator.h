@@ -9,8 +9,12 @@ class PHubBroadcast;
 
 enum OperationStatus
 {
+	Untouched,
 	Finished,
-	QueuedForExecution
+	QueuedForExecution,
+	//skipped executions are the ones belonging to other nodes.
+	//they are in my schedule so we can lazily evaluate dependencies.
+	Skipped
 };
 using namespace std;
 enum OperatorType
