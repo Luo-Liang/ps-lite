@@ -10,15 +10,17 @@ public:
 		General,
 		LocallyAvailable
 	};
-	OperatorContext(vector<PLinkKey> in,
-		vector<PLinkKey> out) : Initialized(false)
+	OperatorContext(vector<NodeId>& in,
+		vector<NodeId>& out, PLinkKey k) : Initialized(false)
 	{
-		inputs = in;
-		outputs = out;
+		From = in;
+		To = out;
+		Key = k;
 	}
 	bool Initialized;
-	vector<PLinkKey> inputs;
-	vector<PLinkKey> outputs;
+	PLinkKey Key;
+	vector<NodeId> From;
+	vector<NodeId> To;
 	shared_ptr<void> additionalContext = NULL;
 	OperatorContextTypeCode typeCode = OperatorContextTypeCode::General;
 };
@@ -38,26 +40,22 @@ public:
 class PHubOperatorContext : public OperatorContext
 {
 public:
-	NodeId From;
-	NodeId To;
-	PHubOperatorContext(vector<PLinkKey>& in, vector<PLinkKey>& out, NodeId from, NodeId to) :
-		OperatorContext(in, out)
+	PHubOperatorContext(vector<NodeId>& in, vector<NodeId>& out, PLinkKey k) :
+		OperatorContext(in, out, k)
 	{
-		From = from;
-		To = to;
+
 	}
 };
 
 class GlooContext : public OperatorContext
 {
 public:
-	GlooContext(vector<PLinkKey>& in, vector<PLinkKey>& out, int rank, int size) :
-		OperatorContext(in, out)
+	GlooContext(vector<NodeId>& in, vector<NodeId>& out, int rank, int size, PLinkKey k) :
+		OperatorContext(in, out, k)
 	{
 		Rank = rank;
 		Size = size;
 	}
 	int Rank;
 	int Size;
-	vector<NodeId> Peers;
 };

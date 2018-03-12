@@ -103,27 +103,33 @@ private:
 				{
 					var pContext = dynamic_pointer_cast<PHubOperatorContext>(current->pContext);
 					var me = current->RunOn;
-					var remote = pContext->From;
-					//my view on remote:
-					var cntr = viewOn.at(tuple<NodeId, NodeId>(me, remote));
-					if (cntr == UNSET)
+					for (var& remote : pContext->From)
 					{
-						ResultStr = CxxxxStringFormat("Remote has not initialized the current viewOn. CURRENT=%d, CNTR=%d", current->RunOn, cntr);
-						return false;
+						//var remote = pContext->From;
+						//my view on remote:
+						var cntr = viewOn.at(tuple<NodeId, NodeId>(me, remote));
+						if (cntr == UNSET)
+						{
+							ResultStr = CxxxxStringFormat("Remote has not initialized the current viewOn. CURRENT=%d, CNTR=%d", current->RunOn, cntr);
+							return false;
+						}
+						counter.at(current->RunOn) += cntr;
 					}
-					counter.at(current->RunOn) += cntr;
 					//add to me.
 				}
 				case OperatorType::PHubBroadcast:
 				{
 					//if i am a reciever, my counter is overwritten.
 					var pContext = dynamic_pointer_cast<PHubOperatorContext>(current->pContext);
-					var isReceiver = pContext->To == current->RunOn;
-					var sender = pContext->From;
+					var isReceiver = find(pContext->To.begin(),
+						pContext->To.end(),
+						current->RunOn) != pContext->To.end();
+
+					var sender = pContext->From.at(0);
 					if (isReceiver)
 					{
 						//upate view on, not the actual merge buffer --- that's the job of aggregate
-						viewOn.at(tuple<NodeId, NodeId>(pContext->To, pContext->From)) = counter.at(sender);
+						viewOn.at(tuple<NodeId, NodeId>(current->RunOn, sender)) = counter.at(sender);
 					}
 					//if i am a sender, not really need to do anything
 				}
@@ -132,7 +138,7 @@ private:
 					//who are the particpants?
 					//the result is the sum of everyone's counter.
 					var pContext = dynamic_pointer_cast<GlooContext>(current->pContext);
-					for (var id : pContext->Peers)
+					for (var id : pContext->From)
 					{
 						if (id != current->RunOn)
 						{
