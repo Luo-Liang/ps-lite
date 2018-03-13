@@ -22,7 +22,7 @@ enum OperatorType
 	UNSET,
 	PHubBroadcast,
 	PHubAggregator,
-	PHubGather,
+	//PHubGather,
 	PHubOptimizer,
 	//this gives the operator context's additional context a gloo context.
 	GlooCollectiveAlgorithm,

@@ -737,6 +737,7 @@ namespace ps
 					}
 					else
 					{
+						//async
 						//MetaSlim* meta = psSendBuffer[i][j].pMetaSlimBuffer;
 						//meta->push = true;
 						//meta->request = false;

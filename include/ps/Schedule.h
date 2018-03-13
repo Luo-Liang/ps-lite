@@ -148,6 +148,10 @@ private:
 						}
 					}
 				}
+				default:
+				{
+					CHECK(false) << "cannot verifiy ";
+				}
 			}
 			current->Finished = true;
 			//what are possible next operators?
@@ -320,30 +324,6 @@ public:
 			}
 		}
 
-		//results now contains roots of the currentIDs.
-		//we need to preserve execution dependency.
-		//using "execution dependency"
-		//while (reachiability.size() != 0)
-		//{
-		//	var curr = reachiability.front();
-		//	reachiability.pop();
-		//	//make sure only one path to a certain node from root, aka forests.
-		//	vector<shared_ptr<ScheduleNode>> toTrim;
-		//	for (shared_ptr<ScheduleNode> down : curr->Downstream)
-		//	{
-		//		//safe. previous level must have finsihed before next level start.
-		//		down->Level = curr->Level + 1;
-		//		if (down->RunOn != currentID)
-		//		{
-		//			//this whole subtree is removed.
-		//			//this is not necessary if we're dealing with implicit dependency induced from collectives.
-		//			toTrim.push_back(down);
-		//			CHECK(false) << "what is this";
-		//		}
-		//		reachiability.push(down);
-		//	}
-		//}
-		//roots are returned.
 		return results;
 	}
 

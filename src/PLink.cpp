@@ -7,7 +7,7 @@ void PLinkExecutor::ReadiyGraph()
 	//I only care about my schedule
 	std::string host;
 	uint port;
-	ParseHostPort(rendezvousString, host, port);
+	ParseHostPort(rendezvous, host, port);
 	var pRedisStore = make_shared<gloo::rendezvous::RedisStore>(host, port);
 
 	var attribute = gloo::transport::ibverbs::attr();

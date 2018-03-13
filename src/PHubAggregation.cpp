@@ -92,20 +92,22 @@ void PHubAggregator::Initialize(shared_ptr<OperatorContext> context)
 	Type = OperatorType::PHubOptimizer;
 	pPhub = dynamic_pointer_cast<PHub>(context->additionalContext);
 	opContext = dynamic_pointer_cast<PHubOperatorContext>(context);
-	key = context->inputs.at(0);
-	keySize = pPhub->keySizes.at(key);
+	keySize = pPhub->keySizes.at(context->Key);
 	opContext = context;
 	aggregator = make_shared<TTAggregator>();
 	//figure out where is the source and where is the destination.
-	var mBuffer = pPhub->RetrieveMergeBuffer(key);
+	var mBuffer = pPhub->RetrieveMergeBuffer(context->Key);
 	dest = (float*)mBuffer.GetCurrentWriteBuffer();
 	//consult allocator for source.
 	var& allocator = pPhub->GetAllocator();
 	//requires us to know who finished the job!
-	var idx = pPhub->GetNodeIndexFromID(opContext->Remote);
-	var sockId = pPhub->GetSocketAffinityFromKey(key);
-	size_t notUsed;
-	source = (float*)allocator.PHUBReceiveKVBuffer(key, idx, sockId, notUsed);
+	var sockId = pPhub->GetSocketAffinityFromKey(opContext->Key);
+	for (Cntr i = 0; i < opContext->From.size(); i++)
+	{
+		var idx = pPhub->GetNodeIndexFromID(opContext->From.at(i));
+		size_t notUsed;
+		sources.push_back((float*)allocator.PHUBReceiveKVBuffer(opContext->Key, idx, sockId, notUsed));
+	}
 }
 
 OperationStatus PHubAggregator::Run()
@@ -113,6 +115,10 @@ OperationStatus PHubAggregator::Run()
 	CHECK(aggregator != NULL);
 	//dest, source, len
 	//need to saveit in the merge buffer's write location.
-	aggregator->VectorVectorAdd(dest, keySize, source);
+	for (Cntr i = 0; i < opContext->From.size(); i++)
+	{
+		//most likely just run once, but built to support running many times.
+		aggregator->VectorVectorAdd(dest, keySize, sources.at(i));
+	}
 	return OperationStatus::Finished;
 }

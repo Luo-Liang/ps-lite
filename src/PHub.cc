@@ -751,7 +751,7 @@ void PHub::Push(PLinkKey key, NodeId destination)
 	var qpIdx = remoteKey2QPIdx.at(destination).at(key);
 	///For non-accurate optimizations, make sure to check the first Sizeof(metaSlim) buffer is not touched.
 	auto& mergeBuffer = MergeBuffers.at(key);
-	auto buffer = MergeBuffers.at(key).GetCurrentReadBuffer();
+	auto buffer = MergeBuffers.at(key).GetCurrentGradMergeBuffer();
 	auto destinationIdx = nodeID2Index.at(destination);
 	//o is meta, 1 is kv. 
 	mergeBuffer.RDMAWorkerSendSgesArray.at(destinationIdx).addr = (uint64_t)buffer;

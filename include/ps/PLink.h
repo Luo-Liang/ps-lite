@@ -57,7 +57,7 @@ class PLinkExecutor
 	void ReadiyGraph();
 	unordered_map<PLinkKey, shared_ptr<Schedule>> perKeySchedule;
 	NodeId ID;
-	std::string rendezvousString;
+	std::string rendezvous;
 public:
 	void Initialize(unordered_map<PLinkKey, shared_ptr<Schedule>> schedules,
 		string redezvousUri,

@@ -6,11 +6,11 @@
 class PHubAggregator :IOperator
 {
 	shared_ptr<PHub> pPhub = NULL;
-	PLinkKey key;
 	size_t keySize;
 	shared_ptr<PHubOperatorContext> opContext;
 	shared_ptr<TTAggregator> aggregator;
-	float* source;
+	vector<float*> sources;
+	//there is a single destination because it is the mergebuffer.
 	float* dest;
 public:
 	virtual void Initialize(shared_ptr<OperatorContext> context) override;

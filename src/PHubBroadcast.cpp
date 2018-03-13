@@ -13,9 +13,9 @@ void PHubBroadcast::Initialize(shared_ptr<OperatorContext> context)
 	opContext = dynamic_pointer_cast<PHubOperatorContext>(context);
 	//am i a sender or a receiver
 	//i am a receiver if i am to.
-	CHECK(opContext->From == pPhub->ID || opContext->To == pPhub->ID);
-	CHECK(opContext->From != pPhub->ID || opContext->To != pPhub->ID);
-	isReceiver = opContext->To == pPhub->ID;
+
+	CHECK(opContext->From.size() == 1);
+	isReceiver = opContext->From.at(0) == pPhub->ID;
 	//target destinations in output
 	opContext = context;
 }
@@ -28,7 +28,7 @@ OperationStatus PHubBroadcast::Run()
 	if (isReceiver)
 	{
 		//a receiver simply polls.
-		var status = pPhub->TryPull(key, (NodeId)opContext->inputs[0]);
+		var status = pPhub->TryPull(key, (NodeId)opContext->From.at(0));
 		if (status)
 		{
 			return OperationStatus::Finished;
@@ -41,11 +41,10 @@ OperationStatus PHubBroadcast::Run()
 	else
 	{
 		//a sender simply sends.
-		for (var remote : opContext->outputs)
+		for (var remote : opContext->To)
 		{
 			pPhub->Push(key, (NodeId)remote);
 		}
 		return OperationStatus::Finished;
 	}
-
 }

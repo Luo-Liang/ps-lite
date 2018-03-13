@@ -116,8 +116,8 @@ public:
 	{
 		return ActualElementCountPaddedForSSE;
 	}
-
-	inline char* GetCurrentWriteBuffer()
+	//The buffer you use to perform aggregation.
+	inline char* GetCurrentGradMergeBuffer()
 	{
 		//write buffer is always opposite from pull buffer.
 		auto ret = WriteBufferIndex == 0 ? Buffer1 : Buffer2;
@@ -125,8 +125,8 @@ public:
 
 		return ret;
 	}
-
-	inline char* GetCurrentReadBuffer()
+	//The model buffer
+	inline char* GetCurrentWeightBuffer()
 	{
 		CHECK(PSInitialized);
 		auto ret = WriteBufferIndex == 0 ? Buffer2 : Buffer1;
@@ -135,7 +135,7 @@ public:
 		return ret;
 	}
 
-	void FlipReadWriteBuffer()
+	void FlipBuffer()
 	{
 		WriteBufferIndex = (WriteBufferIndex + 1) & 1;
 	}

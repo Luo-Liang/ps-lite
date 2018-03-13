@@ -248,7 +248,6 @@ void PHubOptimizer::Initialize(shared_ptr<OperatorContext> context)
 	//CHECK(pKeyDescs != NULL);
 	//extract phub context.
 	pHub = dynamic_pointer_cast<PHub>(context->additionalContext);
-	key = context->inputs.at(0);
 	var sz = pHub->keySizes.at(key);
 
 	//create keyDescs.
@@ -256,8 +255,8 @@ void PHubOptimizer::Initialize(shared_ptr<OperatorContext> context)
 	PHubAllocator& allocator = pHub->GetAllocator();
 	int notUsed;
 	var mBuffer = pHub->RetrieveMergeBuffer(key);
-	weight = (float*)mBuffer.GetCurrentReadBuffer();
-	grad = (float*)mBuffer.GetCurrentWriteBuffer();
+	weight = (float*)mBuffer.GetCurrentWeightBuffer();
+	grad = (float*)mBuffer.GetCurrentGradMergeBuffer();
 	opt = make_shared<NAGTTOptimizer>(numAggregated, key, sz, 0x240, socketId);
 }
 OperationStatus PHubOptimizer::Run()
@@ -268,6 +267,11 @@ OperationStatus PHubOptimizer::Run()
 	opt->Update(targetKey, weight, grad, len);
 	//reset. flip merge buffer.
 	var mBuffer = pHub->RetrieveMergeBuffer(key);
-	mBuffer.FlipReadWriteBuffer();
+	//Read and Write buffer have been collapsed into one buffer.
+	//no need to flip.
+	mBuffer.FlipBuffer();
+	//if i am the optimizer, all i wanted is to send out the optimized value,
+	//now weight has the current iteration of weight buffer, but it is pointed to by gradmergebuffer, which is used
+	//to communicate.
 	return OperationStatus::Finished;
 }
