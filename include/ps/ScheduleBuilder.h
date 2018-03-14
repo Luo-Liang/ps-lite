@@ -2,27 +2,25 @@
 #include <string.h>
 #include <ps/Schedule.h>
 #include <vector>
+#include <ps/PLink.h>
 class ScheduleBuilder
 {
-	PLinkKey Key;
-	shared_ptr<ScheduleNode> pChainHead = NULL;
-	shared_ptr<ScheduleNode> pChainTrail = NULL;
+	PLinkKey key;
 public:
-	ScheduleBuilder(PLinkKey key)
+	vector<shared_ptr<ScheduleNode>> CreateCollectives(vector<NodeId>& participants)
 	{
-		Key = key;
+		vector<shared_ptr<ScheduleNode>> results;
+		for (Cntr rank = 0; rank < participants.size(); rank++)
+		{
+			var ops = make_shared<GlooHalvingAndDoubling<float>>();
+			var ctx = make_shared<GlooContext>(participants, participants, rank, participants.size());
+			results.push_back(make_shared<ScheduleNode>(ctx, ops, participants.at(rank)));
+		}
+		return results;
+	}
+
+	void IntelligentZip(vector<ScheduleNode> upstream, vector<ScheduleNode> downstream)
+	{
 
 	}
-	//chains
-	ScheduleBuilder ThenRunCollective(vector<NodeId> inputs, std::string algorithm);
-	ScheduleBuilder ThenRunPHubBroadcast(NodeId from, vector<NodeId> to);
-	ScheduleBuilder ThenRunPHubGather(vector<NodeId> from, NodeId to);
-	ScheduleBuilder ThenRunPHubAggregate(vector<NodeId> runOn);
-	ScheduleBuilder ThenRunPHubOptimize(vector<NodeId> runOn);
-	//chain heads
-	ScheduleBuilder HeadRunCollective(vector<NodeId> inputs, std::string algorithm);
-	ScheduleBuilder HeadRunPHubBroadcast(NodeId from, vector<NodeId> to);
-	ScheduleBuilder HeadRunPHubGather(vector<NodeId> from, NodeId to);
-	//zip two chains.
-	ScheduleBuilder ZipAll(vector<NodeId> inputs);
 };

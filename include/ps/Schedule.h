@@ -25,10 +25,11 @@ public:
 	int UnresolvedDependencies;
 	bool Finished;
 	ScheduleNode(shared_ptr<OperatorContext> s_pContext,
-		shared_ptr<IOperator> s_pOperator)
+		shared_ptr<IOperator> s_pOperator, NodeId runsOn)
 	{
 		pContext = s_pContext;
 		pOperator = s_pOperator;
+		RunOn = runsOn;
 	}
 	void* Annotation;
 };
