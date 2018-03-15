@@ -21,8 +21,10 @@ public:
 
 	void IntelligentZip(vector<ScheduleNode>& upstream, vector<ScheduleNode>& downstream)
 	{
+		CHECK(upstream.size() > 0);
+		CHECK(downstream.size() > 0);
 		//the operators must be homogeneous
-		CHECK(upstream.size() == downstream.size());
+		//CHECK(upstream.size() == downstream.size());
 		//check that every node is the same operator in upstream.
 		//check that every node is the same operator in downstream.
 		for (Cntr i = 0; i < upstream.size(); i++)
@@ -33,24 +35,41 @@ public:
 
 		//now assign upstream and downstreams accordingly, using RunAt and from, tos.
 		//only connecting send/recv using from tos, others should all be using RunAt.
-		for (Cntr i = 0; i < upstream.size(); i++)
-		{
-			var upstreamType = upstream.at(0).pOperator->Type;
-			//i can infer downstream type to be either recv nodes or other arbitrary nodes.
-			switch (upstreamType)
-			{
-				case OperatorType::PHubBroadcast:
-				{
-					//check everyone is send or is all receive.
-					for (Cntr i = 0; i < upstream.size(); i++)
-					{
-						var ctx = (shared_ptr<PHubOperatorContext>)dynamic_pointer_cast<PHubOperatorContext>(upstream.at(i).pContext);
-						var ctx0 = (shared_ptr<PHubOperatorContext>)dynamic_pointer_cast<PHubOperatorContext>(upstream.at(0).pContext);
 
-						ctx->
+		var upstreamType = upstream.at(0).pOperator->Type;
+		switch (upstreamType)
+		{
+			case OperatorType::PHubBroadcast:
+			{
+				//i can infer downstream type to be either recv nodes or other arbitrary nodes.
+				var ctx0 = (shared_ptr<PHubOperatorContext>)dynamic_pointer_cast<PHubOperatorContext>(upstream.at(0).pContext);
+				//check everyone is send or is all receive.
+				var isSender0 = find(ctx0->From.begin(), ctx0->From.end(), upstream.at(0).RunOn) != ctx0->From.end();
+				for (Cntr i = 0; i < upstream.size(); i++)
+				{
+					var ctx = (shared_ptr<PHubOperatorContext>)dynamic_pointer_cast<PHubOperatorContext>(upstream.at(i).pContext);
+					var isSender = find(ctx->From.begin(), ctx->From.end(), upstream.at(i).RunOn) != ctx->From.end();
+					CHECK(isSender == isSender0);
+				}
+				//how i zip downstream dependes on whether upstreams are senders.
+				if (isSender0)
+				{
+					//upstream are broadcast senders.
+					//downstreams must be broadcast receivers.
+					//check that.
+					var dctx0 = (shared_ptr<PHubOperatorContext>)dynamic_pointer_cast<PHubOperatorContext>(downstream.at(0).pContext);
+					for (Cntr i = 0; i < downstream.size(); i++)
+					{
+						var ctx = (shared_ptr<PHubOperatorContext>)dynamic_pointer_cast<PHubOperatorContext>(downstream.at(i).pContext);
+						var disRecvr = find(ctx->From.begin(), ctx->From.end(), downstream.at(i)->RunOn) == ctx->From.end();
 					}
+				}
+				else
+				{
+
 				}
 			}
 		}
 	}
+}
 };
