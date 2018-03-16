@@ -6,7 +6,7 @@
 #include <infiniband/verbs.h>
 using namespace std;
 
-class PHubBroadcast : IOperator
+class PHubBroadcastOp : IOperator
 {
 	bool isReceiver = true;
 	shared_ptr<PHub> pPhub = NULL;

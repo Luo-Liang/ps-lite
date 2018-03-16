@@ -5,7 +5,7 @@
 #include <gloo/allreduce_halving_doubling.h>
 
 class PHubOptimizer;
-class PHubBroadcast;
+class PHubBroadcastOp;
 
 enum OperationStatus
 {

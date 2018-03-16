@@ -6,7 +6,7 @@
 #include <ps/PHubBroadcast.h>
 
 
-void PHubBroadcast::Initialize(shared_ptr<OperatorContext> context)
+void PHubBroadcastOp::Initialize(shared_ptr<OperatorContext> context)
 {
 	Type = OperatorType::PHubBroadcast;
 	pPhub = dynamic_pointer_cast<PHub>(context->additionalContext);
@@ -20,7 +20,7 @@ void PHubBroadcast::Initialize(shared_ptr<OperatorContext> context)
 	opContext = context;
 }
 
-OperationStatus PHubBroadcast::Run()
+OperationStatus PHubBroadcastOp::Run()
 {
 	//am i the receiving side?
 	//phub should optimize the broadcast routine.
