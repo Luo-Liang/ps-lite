@@ -4,7 +4,7 @@
 class NAGTTOptimizer;
 
 
-class PHubOptimizer : IOperator
+class PHubOptimizerOp : IOperator
 {
 public:
 	shared_ptr<NAGTTOptimizer> opt;
