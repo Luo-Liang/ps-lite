@@ -240,7 +240,7 @@ public:
 
 
 
-void PHubOptimizer::Initialize(shared_ptr<OperatorContext> context)
+void PHubOptimizerOp::Initialize(shared_ptr<OperatorContext> context)
 {
 	Type = OperatorType::PHubOptimizer;
 	CHECK(context->typeCode == OperatorContext::LocallyAvailable);
@@ -259,7 +259,7 @@ void PHubOptimizer::Initialize(shared_ptr<OperatorContext> context)
 	grad = (float*)mBuffer.GetCurrentGradMergeBuffer();
 	opt = make_shared<NAGTTOptimizer>(numAggregated, key, sz, 0x240, socketId);
 }
-OperationStatus PHubOptimizer::Run()
+OperationStatus PHubOptimizerOp::Run()
 {
 	CHECK(weight != NULL);
 	CHECK(grad != NULL);
