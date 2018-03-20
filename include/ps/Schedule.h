@@ -18,7 +18,8 @@ public:
 	shared_ptr<OperatorContext> pContext;
 	shared_ptr<IOperator> pOperator;
 	NodeId RunOn;
-	double EstimatedCost; //? for a local operator the cost is 0.
+	//double EstimatedCost; //? for a local operator the cost is 0.
+	//cost estimationi s moved to PLinkSim
 	vector<shared_ptr<ScheduleNode>> Upstream;
 	vector<shared_ptr<ScheduleNode>> Downstream;
 	uint ID = 0;
@@ -76,10 +77,12 @@ private:
 		}
 		//everyone's counter starts with 0.
 		int optimizationCounts = 0;
+		unordered_map<OpID, int> opCounter;
 		while (ReadyQ.size() != 0)
 		{
 			var current = ReadyQ.front();
 			ReadyQ.pop();
+			bool canFinish = true;
 			switch (current->pOperator->Type)
 			{
 				case OperatorType::PHubOptimizer:
@@ -129,24 +132,44 @@ private:
 					var sender = pContext->From.at(0);
 					if (isReceiver)
 					{
-						//upate view on, not the actual merge buffer --- that's the job of aggregate
-						viewOn.at(tuple<NodeId, NodeId>(current->RunOn, sender)) = counter.at(sender);
+						if (opCounter[pContext->OPID] == 0)
+						{
+							//pop, but needs to revisit again.
+							canFinish = false;
+						}
+						else
+						{
+							//upate view on, not the actual merge buffer --- that's the job of aggregate
+							viewOn.at(tuple<NodeId, NodeId>(current->RunOn, sender)) = counter.at(sender);
+						}
 					}
-					//if i am a sender, not really need to do anything
+					else
+					{
+						opCounter[pContext->OPID]++;
+					}
+					//if i am a sender, not really need to do anything, except for incrementing counter.
 				}
 				case OperatorType::GlooCollectiveAlgorithm:
 				{
 					//who are the particpants?
 					//the result is the sum of everyone's counter.
 					var pContext = dynamic_pointer_cast<GlooContext>(current->pContext);
-					for (var id : pContext->From)
+					if (opCounter[pContext->OPID] == pContext->From.size())
 					{
-						if (id != current->RunOn)
+						for (var id : pContext->From)
 						{
-							//only update mine. 
-							//there are many such nodes that will update others' values.
-							counter.at(current->RunOn) += counter.at(id);
+							if (id != current->RunOn)
+							{
+								//only update mine. 
+								//there are many such nodes that will update others' values.
+								counter.at(current->RunOn) += counter.at(id);
+							}
 						}
+					}
+					else
+					{
+						opCounter[pContext->OPID]++;
+						canFinish = false;
 					}
 				}
 				default:
@@ -157,15 +180,23 @@ private:
 			current->Finished = true;
 			//what are possible next operators?
 			//my children, that are ready, should be queued.
-			for (shared_ptr<ScheduleNode> pSN : current->Downstream)
+			if (canFinish)
 			{
-				CHECK(pSN->Finished == false);
-				pSN->UnresolvedDependencies -= 1;
-				if (pSN->UnresolvedDependencies == 0)
+				for (shared_ptr<ScheduleNode> pSN : current->Downstream)
 				{
-					//queue it!
-					ReadyQ.push(pSN);
+					CHECK(pSN->Finished == false);
+					pSN->UnresolvedDependencies -= 1;
+					if (pSN->UnresolvedDependencies == 0)
+					{
+						//queue it!
+						ReadyQ.push(pSN);
+					}
 				}
+			}
+			else
+			{
+				//revisit this node.
+				ReadyQ.push(current);
 			}
 		}
 

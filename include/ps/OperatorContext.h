@@ -1,9 +1,11 @@
 #pragma once
 #include "phub.h"
 #include <vector>
+typedef uint OpID;
 
 class OperatorContext
 {
+	static uint sID;
 public:
 	enum OperatorContextTypeCode
 	{
@@ -16,6 +18,7 @@ public:
 		From = in;
 		To = out;
 		Key = k;
+		OPID = sID++;
 	}
 	bool Initialized;
 	PLinkKey Key;
@@ -23,6 +26,7 @@ public:
 	vector<NodeId> To;
 	shared_ptr<void> additionalContext = NULL;
 	OperatorContextTypeCode typeCode = OperatorContextTypeCode::General;
+	OpID OPID;
 };
 
 //template <class T>
@@ -46,7 +50,6 @@ public:
 
 	}
 };
-
 class GlooContext : public OperatorContext
 {
 public:

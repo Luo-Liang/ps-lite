@@ -4,6 +4,7 @@
 #include <ps/PLink.h>
 using namespace std;
 typedef uint DevId;
+class Link;
 class Device
 {
 	//each of the link has one side that is me.
@@ -14,7 +15,6 @@ public:
 };
 
 ///This is what goes into the event driven queue.
-class Link;
 struct PLinkTransferEvent
 {
 	shared_ptr<ScheduleNode> RelevantNode;
@@ -66,7 +66,7 @@ public:
 	shared_ptr<Device> EP1;
 	shared_ptr<Device> EP2;
 	//effective bandwidth is Bandwidth, averaged by number of pending events.
-	//vector<shared_ptr<PLinkTransferEvent>> PendingEvents;
+	vector<shared_ptr<PLinkTransferEvent>> PendingEvents;
 };
 
 class Environment
