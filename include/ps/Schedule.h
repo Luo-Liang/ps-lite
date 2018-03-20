@@ -130,23 +130,25 @@ private:
 						current->RunOn) != pContext->To.end();
 
 					var sender = pContext->From.at(0);
+					//note that send and recv are connected with a pseudo dependency
+					//no need to deal with counting finished
 					if (isReceiver)
 					{
-						if (opCounter[pContext->OPID] == 0)
-						{
-							//pop, but needs to revisit again.
-							canFinish = false;
-						}
-						else
-						{
+						//if (opCounter[pContext->OPID] == 0)
+						//{
+						//	//pop, but needs to revisit again.
+						//	canFinish = false;
+						//}
+						//else
+						//{
 							//upate view on, not the actual merge buffer --- that's the job of aggregate
-							viewOn.at(tuple<NodeId, NodeId>(current->RunOn, sender)) = counter.at(sender);
-						}
+						viewOn.at(tuple<NodeId, NodeId>(current->RunOn, sender)) = counter.at(sender);
+						//}
 					}
-					else
-					{
-						opCounter[pContext->OPID]++;
-					}
+					//else
+					//{
+					//	opCounter[pContext->OPID]++;
+					//}
 					//if i am a sender, not really need to do anything, except for incrementing counter.
 				}
 				case OperatorType::GlooCollectiveAlgorithm:

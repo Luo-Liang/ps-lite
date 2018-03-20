@@ -2,7 +2,6 @@
 #include <queue>
 
 static unordered_map <tuple<DevId, DevId>, shared_ptr<vector<shared_ptr<Link>>>> routeCache;
-static unordered_map<tuple<DevId, DevId>, size_t> bottleneckCache;
 static shared_ptr<vector<shared_ptr<Link>>> GetPath(DevId src, DevId dest, unordered_map<tuple<DevId, DevId, DevId>, shared_ptr<Link>>& routeMap)
 {
 	var key = tuple<DevId, DevId>(src, dest);
@@ -13,7 +12,6 @@ static shared_ptr<vector<shared_ptr<Link>>> GetPath(DevId src, DevId dest, unord
 	//now figure out the new data
 	DevId current = src;
 	var result = make_shared<vector<shared_ptr<Link>>>();
-	uint eBw = UINT_MAX;
 	while (dest != current)
 	{
 		var nextStep = routeMap.at(tuple<DevId, DevId, DevId>(src, dest, current));
@@ -26,20 +24,25 @@ static shared_ptr<vector<shared_ptr<Link>>> GetPath(DevId src, DevId dest, unord
 		{
 			current = nextStep->EP1->DID;
 		}
-		eBw = eBw > nextStep->Bandwidth ? nextStep->Bandwidth : eBw;
 	}
-	bottleneckCache.at(key) = eBw;
 	routeCache.at(key) = result;
 }
 
 static uint GetLinkBottleneck(DevId src, DevId dest, unordered_map<tuple<DevId, DevId, DevId>, shared_ptr<Link>>& routeMap)
 {
 	var key = tuple<DevId, DevId>(src, dest);
-	if (bottleneckCache.find(key) == bottleneckCache.end())
+	var path = GetPath(src, dest, routeMap);
+	uint BW = UINT_MAX;
+	for (Cntr i = 0; i < path->size(); i++)
 	{
-		GetPath(src, dest, routeMap);
+		var origBW = path->at(i)->Bandwidth;
+		var eBW = origBW / path->at(i)->PendingEvents.size();
+		if (BW > eBW)
+		{
+			BW = eBW;
+		}
 	}
-	return bottleneckCache.at(key);
+	return BW;
 }
 
 double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
@@ -48,7 +51,6 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 	Environment& env)
 {
 	//now i need to set up a timeline.
-	double currentTimeInSec = 0;
 	//timeline 
 	//what are the known events?
 	//we know at least the start of each schedule.
@@ -83,8 +85,8 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 					//associated links?
 					var affectedLinks = GetPath(from, root->pContext->To.at(i), env.RouteMap);
 					//var projectedEnd = readyTime + size / GetLinkBottleneck(from, root->pContext->To.at(i), env.RouteMap);
-					var eventEndNode = make_shared<PLinkTransferEvent>(PLinkEventType::START, node, readyTime, pendingTransfer, affectedLinks);
-					timeline.push(eventEndNode);
+					var eventBegNode = make_shared<PLinkTransferEvent>(PLinkEventType::START, node, readyTime, pendingTransfer, affectedLinks);
+					timeline.push(eventBegNode);
 					//dont queue events to affected links yet.
 				}
 			}
@@ -109,23 +111,37 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 	//has setup initialb state. now try to execute timeline.
 	//each step, 
 	unordered_map<OpID, int> opCounter;
+	double lastTime = 0;
 	while (timeline.size() != 0)
 	{
 		var curr = timeline.top();
 		var currTime = curr->TimeStamp;
 		timeline.pop();
+		var key = curr->RelevantNode->pContext->Key;
+		var elapsedTime = currTime - lastTime;
 		if (curr->EventType == PLinkEventType::START)
 		{
 			//needs to set up the initial phase of the algorithm.
+			//must be a Send node.
+			//because it is a start.
 			if (curr->RelevantNode->pOperator->Type == OperatorType::PHubBroadcast)
 			{
 				//this to affected links.
 				for (Cntr i = 0; i < curr->AssignedLinks->size(); i++)
 				{
 					curr->AssignedLinks->at(i)->PendingEvents.push_back(curr);
+
 				}
+				//remember, whenever a link share is updated, update the progress of each affected event
 				//produce an underestimate finish time.
-				var estimatedEnd = 
+				var from = curr->RelevantNode->pContext->From.at(0);
+				var to = curr->RelevantNode->RunOn;
+				//promote.
+				double sz = keySizes.at(key);
+				var estimatedEnd = currTime + sz / GetLinkBottleneck(from, to, env.RouteMap);
+				//queue an end node.
+				var endNode = make_shared<PLinkTransferEvent>(PLinkEventType::END, curr->RelevantNode, estimatedEnd, curr->PendingTransfer, curr->AssignedLinks);
+				timeline.push(endNode);
 			}
 			else if (curr->RelevantNode->pOperator->Type == OperatorType::GlooCollectiveAlgorithm)
 			{
@@ -139,8 +155,15 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 		}
 		else
 		{
+			//note that we always simulate maximized concurrency of each schedule.
+			if (curr->RelevantNode->pOperator->Type == OperatorType::PHubBroadcast)
+			{
+				//note that due to pesudo links, we dont need to worry about depdenency b/w send and recv.
+				var timeDiff = currTime - lastTime;
+				//can I finish you now?
 
+			}
 		}
-
+		lastTime = currTime;
 	}
 }
