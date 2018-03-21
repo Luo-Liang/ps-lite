@@ -1,5 +1,5 @@
 #include <ps/internal/PLinkSim.h>
-#include <queue>
+#include <set>
 
 static unordered_map <tuple<DevId, DevId>, shared_ptr<vector<shared_ptr<Link>>>> routeCache;
 static shared_ptr<vector<shared_ptr<Link>>> GetPath(DevId src, DevId dest, unordered_map<tuple<DevId, DevId, DevId>, shared_ptr<Link>>& routeMap)
@@ -45,6 +45,8 @@ static uint GetLinkBottleneck(DevId src, DevId dest, unordered_map<tuple<DevId, 
 	return BW;
 }
 
+EventId PLinkTransferEvent::Ticketer;
+
 double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 	unordered_map<PLinkKey, shared_ptr<Schedule>>& schedules,
 	unordered_map<PLinkKey, double>& ready2GoTime,
@@ -54,10 +56,10 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 	//timeline 
 	//what are the known events?
 	//we know at least the start of each schedule.
-	vector<shared_ptr<PLinkTransferEvent>> pendingEvents;
+	unordered_map<EventId, shared_ptr<PLinkTransferEvent>> timelineEvents;
 	//you want to start with small elements.
-	priority_queue<shared_ptr<PLinkTransferEvent>, vector<shared_ptr<PLinkTransferEvent>>, PLinkTransferEventComparer> timeline(PLinkTransferEventComparer(true));
-
+	//priority_queue<shared_ptr<PLinkTransferEvent>, vector<shared_ptr<PLinkTransferEvent>>, PLinkTransferEventComparer> timeline(PLinkTransferEventComparer(true));
+	set<tuple<double, EventId>> timeline;
 	//find start of each schedule.
 	//this is kind of like a K way merge.
 
@@ -86,7 +88,8 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 					var affectedLinks = GetPath(from, root->pContext->To.at(i), env.RouteMap);
 					//var projectedEnd = readyTime + size / GetLinkBottleneck(from, root->pContext->To.at(i), env.RouteMap);
 					var eventBegNode = make_shared<PLinkTransferEvent>(PLinkEventType::START, node, readyTime, pendingTransfer, affectedLinks);
-					timeline.push(eventBegNode);
+					timelineEvents[eventBegNode->EID] = eventBegNode;
+					timeline.insert(PLinkTimeLineElement(readyTime, eventBegNode->EID));
 					//dont queue events to affected links yet.
 				}
 			}
@@ -103,7 +106,8 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 				//no affected link, just need an eventEndNode.
 				//this allows timeline to progress directly to the current dependants.
 				var eventEndNode = make_shared<PLinkTransferEvent>(PLinkEventType::END, node, readyTime, 0, NULL);
-				timeline.push(eventEndNode);
+				timelineEvents[eventEndNode->EID] = eventEndNode;
+				timeline.insert(PLinkTimeLineElement(readyTime, eventEndNode->EID));
 			}
 		}
 	}
@@ -114,10 +118,10 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 	double lastTime = 0;
 	while (timeline.size() != 0)
 	{
-		var curr = timeline.top();
-		var currTime = curr->TimeStamp;
-		timeline.pop();
-		var key = curr->RelevantNode->pContext->Key;
+		var& curr = *timeline.begin();
+		var currTime = std::get<0>(curr);
+		timeline.erase(curr);
+		var key = timelineEvents.at(std::get<1>(curr))->RelevantNode->pContext->Key;
 		var elapsedTime = currTime - lastTime;
 		if (curr->EventType == PLinkEventType::START)
 		{

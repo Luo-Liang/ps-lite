@@ -4,6 +4,8 @@
 #include <ps/PLink.h>
 using namespace std;
 typedef uint DevId;
+typedef uint EventId;
+typedef tuple<double, EventId> PLinkTimeLineElement;
 class Link;
 class Device
 {
@@ -17,11 +19,13 @@ public:
 ///This is what goes into the event driven queue.
 struct PLinkTransferEvent
 {
+	static EventId Ticketer;
 	shared_ptr<ScheduleNode> RelevantNode;
 	PLinkEventType EventType;
 	double TimeStamp;
 	double PendingTransfer;
 	shared_ptr<vector<shared_ptr<Link>>> AssignedLinks;
+	EventId EID;
 	PLinkTransferEvent(PLinkEventType type, shared_ptr<ScheduleNode> node, double timeStamp, double pendingTransfer, shared_ptr < vector<shared_ptr<Link>>> link)
 	{
 		RelevantNode = node;
@@ -33,28 +37,7 @@ struct PLinkTransferEvent
 		//{
 		//	assignedLink->PendingEvents.push_back(this);
 		//}
-	}
-};
-
-class PLinkTransferEventComparer
-{
-	//just compare timestamp.
-	bool Reverse;
-public:
-	PLinkTransferEventComparer(bool reverse)
-	{
-		Reverse = reverse;
-	}
-	bool operator() (shared_ptr<PLinkTransferEvent> pE1, shared_ptr<PLinkTransferEvent> pE2)
-	{
-		if (Reverse)
-		{
-			return pE1->TimeStamp > pE2->TimeStamp;
-		}
-		else
-		{
-			return pE1->TimeStamp < pE2->TimeStamp;
-		}
+		EID = Ticketer++;
 	}
 };
 
