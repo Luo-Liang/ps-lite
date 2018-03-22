@@ -25,6 +25,7 @@ struct PLinkTransferEvent
 	double TimeStamp;
 	double PendingTransfer;
 	double TransferBandwidth;//this is effectively the bottleneck link given a global route table
+	double LastTouch;
 	shared_ptr<vector<shared_ptr<Link>>> AssignedLinks;
 	EventId EID;
 	PLinkTransferEvent(PLinkEventType type, shared_ptr<ScheduleNode> node, double timeStamp, double pendingTransfer, shared_ptr < vector<shared_ptr<Link>>> link, double bw)
@@ -40,6 +41,11 @@ struct PLinkTransferEvent
 		//}
 		EID = Ticketer++;
 		TransferBandwidth = bw;
+	}
+	void UpdateProgress(double now)
+	{
+		PendingTransfer -= (now - LastTouch) * TransferBandwidth;
+		LastTouch = now;
 	}
 };
 
@@ -78,6 +84,9 @@ enum PLinkEventType
 
 class PLinkSim
 {
+private:
+	//removes and requeues an event element to timeline, in response to a change in effective transfer speed.
+public:
 	double SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 		unordered_map<PLinkKey, shared_ptr<Schedule>>& schedules,
 		unordered_map<PLinkKey, double>& ready2GoTime,
