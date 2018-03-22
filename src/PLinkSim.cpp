@@ -62,7 +62,7 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 	set<tuple<double, EventId>> timeline;
 	//find start of each schedule.
 	//this is kind of like a K way merge.
-
+	unordered_map<OpID, uint> opCounter;
 	//unordered_map<PLinkKey, queue<shared_ptr<ScheduleNode>>> ways;
 	for (var& schedule : schedules)
 	{
@@ -82,12 +82,14 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 				pendingTransfer = keySizes.at(key);
 				//which link am i going?
 				var from = root->pContext->From.at(0);
+				opCounter[root->ID] = root->pContext->To.size();
 				for (Cntr i = 0; i < root->pContext->To.size(); i++)
 				{
 					//associated links?
 					var affectedLinks = GetPath(from, root->pContext->To.at(i), env.RouteMap);
+					var bottleneck = GetLinkBottleneck(from, root->pContext->To.at(i));
 					//var projectedEnd = readyTime + size / GetLinkBottleneck(from, root->pContext->To.at(i), env.RouteMap);
-					var eventBegNode = make_shared<PLinkTransferEvent>(PLinkEventType::START, node, readyTime, pendingTransfer, affectedLinks);
+					var eventBegNode = make_shared<PLinkTransferEvent>(PLinkEventType::START, node, readyTime, pendingTransfer, affectedLinks, bottleneck);
 					timelineEvents[eventBegNode->EID] = eventBegNode;
 					timeline.insert(PLinkTimeLineElement(readyTime, eventBegNode->EID));
 					//dont queue events to affected links yet.
@@ -116,13 +118,18 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 	//each step, 
 	unordered_map<OpID, int> opCounter;
 	double lastTime = 0;
+	unordered_set<EventId> flags;
 	while (timeline.size() != 0)
 	{
-		var& curr = *timeline.begin();
-		var currTime = std::get<0>(curr);
-		timeline.erase(curr);
-		var key = timelineEvents.at(std::get<1>(curr))->RelevantNode->pContext->Key;
+		flags.clear();
+		PLinkTimeLineElement currElement = *timeline.begin();
+		var currTime = std::get<0>(currElement);
+		var currID = std::get<1>(currElement);
+		var curr = timelineEvents.at(currID);
+		timeline.erase(currElement);
+		var key = curr->RelevantNode->pContext->Key;
 		var elapsedTime = currTime - lastTime;
+
 		if (curr->EventType == PLinkEventType::START)
 		{
 			//needs to set up the initial phase of the algorithm.
@@ -133,8 +140,28 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 				//this to affected links.
 				for (Cntr i = 0; i < curr->AssignedLinks->size(); i++)
 				{
+					//this link is being affected by the addition of current task.
+					//all tasks that are running on this link will be:
+					//1) updated on their progress
+					//2) recalculate their bottleneck speed (current transfer speed).
+					for (var task : curr->AssignedLinks->at(i)->PendingEvents)
+					{
+						if (flags.find(task->EID) != flags.end())
+						{
+							continue;
+						}
+						flags.insert(task->EID);
+						//remember here, a task may be update many times.
+						task->PendingTransfer -= task->TransferBandwidth * elapsedTime;
+						var currBW = task->TransferBandwidth;
+						var currLinkBW = curr->AssignedLinks->at(i)->Bandwidth / (curr->AssignedLinks->at(i)->PendingEvents.size() + 1);
+						if (currBW > currLinkBW)
+						{
+							task->TransferBandwidth = currBW;
+							CHECK(task->TransferBandwidth >= 0);
+						}
+					}
 					curr->AssignedLinks->at(i)->PendingEvents.push_back(curr);
-
 				}
 				//remember, whenever a link share is updated, update the progress of each affected event
 				//produce an underestimate finish time.
@@ -145,7 +172,8 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 				var estimatedEnd = currTime + sz / GetLinkBottleneck(from, to, env.RouteMap);
 				//queue an end node.
 				var endNode = make_shared<PLinkTransferEvent>(PLinkEventType::END, curr->RelevantNode, estimatedEnd, curr->PendingTransfer, curr->AssignedLinks);
-				timeline.push(endNode);
+				timelineEvents[endNode->EID] = endNode;
+				timeline.insert(PLinkTimeLineElement(estimatedEnd, endNode->EID));
 			}
 			else if (curr->RelevantNode->pOperator->Type == OperatorType::GlooCollectiveAlgorithm)
 			{
@@ -154,6 +182,7 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 			}
 			else
 			{
+				//no START event should ever be queued for irrelevant 
 				CHECK(false);
 			}
 		}
@@ -162,10 +191,38 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 			//note that we always simulate maximized concurrency of each schedule.
 			if (curr->RelevantNode->pOperator->Type == OperatorType::PHubBroadcast)
 			{
-				//note that due to pesudo links, we dont need to worry about depdenency b/w send and recv.
-				var timeDiff = currTime - lastTime;
-				//can I finish you now?
+				//note that due to pseudo links, we dont need to worry about depdenency b/w send and recv.
+				//can I really finish you now?
+				curr->PendingTransfer -= elapsedTime * curr->TransferBandwidth;
+				//remember, each broadcast is modeled as individual transfer to all destinations.
+				//I can finish this event, but not that operator, unless all transfers are done.
+				CHECK(curr->PendingTransfer >= 0);
+				//get rid of this from timeline.
+				timeline.erase(currElement);
+				//remove this from schedule queue.
+				if (curr->PendingTransfer > 0)
+				{
+					//reschedule it.
+					//create a new estimate.
+					var estimatedDone = currTime + curr->PendingTransfer / curr->TransferBandwidth;
+					timeline.insert(PLinkTimeLineElement(estimatedDone, currID));
+				}
+				else
+				{
+					//is 0.
+					//finish this event.
+					timelineEvents.erase(currID);
+					//free up some link resource that current transfer is using.
+					for (var link = 0; link < curr->AssignedLinks->size(); link++)
+					{
+						//what are the affected tasks?
+						for (var task : curr->AssignedLinks->at(link)->PendingEvents)
+						{
+							//progress these tasks.
 
+						}
+					}
+				}
 			}
 		}
 		lastTime = currTime;

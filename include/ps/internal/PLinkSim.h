@@ -24,9 +24,10 @@ struct PLinkTransferEvent
 	PLinkEventType EventType;
 	double TimeStamp;
 	double PendingTransfer;
+	double TransferBandwidth;//this is effectively the bottleneck link given a global route table
 	shared_ptr<vector<shared_ptr<Link>>> AssignedLinks;
 	EventId EID;
-	PLinkTransferEvent(PLinkEventType type, shared_ptr<ScheduleNode> node, double timeStamp, double pendingTransfer, shared_ptr < vector<shared_ptr<Link>>> link)
+	PLinkTransferEvent(PLinkEventType type, shared_ptr<ScheduleNode> node, double timeStamp, double pendingTransfer, shared_ptr < vector<shared_ptr<Link>>> link, double bw)
 	{
 		RelevantNode = node;
 		EventType = type;
@@ -38,6 +39,7 @@ struct PLinkTransferEvent
 		//	assignedLink->PendingEvents.push_back(this);
 		//}
 		EID = Ticketer++;
+		TransferBandwidth = bw;
 	}
 };
 
