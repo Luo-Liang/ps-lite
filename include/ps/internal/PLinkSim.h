@@ -22,21 +22,24 @@ public:
 struct PLinkTransferEvent
 {
 	static EventId Ticketer;
+	static shared_ptr < vector<shared_ptr<Link>>> EMPTY_LINK;
 	shared_ptr<ScheduleNode> RelevantNode;
 	PLinkEventType EventType;
 	double TimeStamp;
 	double PendingTransfer;
 	double TransferBandwidth;//this is effectively the bottleneck link given a global route table
 	double LastTouch;
+	double StartTime;
 	shared_ptr<vector<shared_ptr<Link>>> AssignedLinks;
 	EventId EID;
 	DevId From;
 	DevId To;
-	PLinkTransferEvent(PLinkEventType type, 
-		shared_ptr<ScheduleNode> node, 
-		double timeStamp, 
-		double pendingTransfer, 
-		shared_ptr < vector<shared_ptr<Link>>> link, 
+	PLinkTransferEvent(PLinkEventType type,
+		shared_ptr<ScheduleNode> node,
+		double timeStamp,
+		double startTime,
+		double pendingTransfer,
+		shared_ptr < vector<shared_ptr<Link>>> link,
 		double bw,
 		DevId from,
 		DevId to)
@@ -45,7 +48,14 @@ struct PLinkTransferEvent
 		EventType = type;
 		TimeStamp = timeStamp;
 		PendingTransfer = pendingTransfer;
-		AssignedLinks = link;
+		if (link != NULL)
+		{
+			AssignedLinks = link;
+		}
+		else
+		{
+			AssignedLinks = EMPTY_LINK;
+		}
 		//for (shared_ptr<Link> assignedLink : *AssignedLinks)
 		//{
 		//	assignedLink->PendingEvents.push_back(this);
@@ -54,23 +64,40 @@ struct PLinkTransferEvent
 		TransferBandwidth = bw;
 		From = from;
 		To = to;
+		StartTime = LastTouch = startTime;
 	}
 	void UpdateProgress(double now)
 	{
-		PendingTransfer -= (now - LastTouch) * TransferBandwidth;
-		LastTouch = now;
+		if (now > LastTouch)
+		{
+			PendingTransfer -= (now - LastTouch) * TransferBandwidth;
+			LastTouch = now;
+		}
 	}
 };
 
 class Link
 {
 public:
-	size_t Bandwidth; //Bps
+	double Bandwidth; //Bps
 	//two endpoints.
 	shared_ptr<Device> EP1;
 	shared_ptr<Device> EP2;
 	//effective bandwidth is Bandwidth, averaged by number of pending events.
 	unordered_set<EventId> PendingEvents;
+	double GetEffectiveLinkSpeed(double now, unordered_map<EventId, shared_ptr<PLinkTransferEvent>>& timelineEvents)
+	{
+		int cntr = 0;
+		for (var id : PendingEvents)
+		{
+			//exclude ghost tasks
+			if (timelineEvents.at(id)->StartTime >= now)
+			{
+				cntr++;
+			}
+		}
+		return Bandwidth / cntr;
+	}
 };
 
 class Environment
