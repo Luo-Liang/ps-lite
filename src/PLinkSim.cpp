@@ -28,6 +28,40 @@ static shared_ptr<vector<shared_ptr<Link>>> GetPath(DevId src, DevId dest, unord
 	routeCache.at(key) = result;
 }
 
+static void FindQueueableChildren(shared_ptr<ScheduleNode> justFinished,
+	set<PLinkTimeLineElement>& timeline,
+	unordered_map<EventId, shared_ptr<PLinkTransferEvent>>& evt,
+	size_t keySize,
+	double now)
+{
+	for (var child : justFinished->Downstream)
+	{
+		child->UnresolvedDependencies--;
+		if (child->UnresolvedDependencies == 0)
+		{
+			//ready.
+			//let me determine how long you are going to run?
+			if (child->pOperator->Type == OperatorType::PHubBroadcast)
+			{
+				//am I a sender or a receiver?
+				//a receiver finishes instantly, plus maybe some delay LINK_TRANSFER_DELAY
+				var from = child->pContext->From.at(0);
+				var runOn = child->RunOn;
+				var isRecver = from != runOn;
+				var finishOffset = 0;
+				if (isRecver)
+				{
+					finishOffset = LINK_TRANSFER_DELAY;
+				}
+				else
+				{
+
+				}
+			}
+		}
+	}
+}
+
 static uint GetLinkBottleneck(DevId src, DevId dest, unordered_map<tuple<DevId, DevId, DevId>, shared_ptr<Link>>& routeMap)
 {
 	var key = tuple<DevId, DevId>(src, dest);
@@ -95,9 +129,16 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 				{
 					//associated links?
 					var affectedLinks = GetPath(from, root->pContext->To.at(i), env.RouteMap);
-					var bottleneck = GetLinkBottleneck(from, root->pContext->To.at(i));
+					var bottleneck = GetLinkBottleneck(from, root->pContext->To.at(i),env.RouteMap);
 					//var projectedEnd = readyTime + size / GetLinkBottleneck(from, root->pContext->To.at(i), env.RouteMap);
-					var eventBegNode = make_shared<PLinkTransferEvent>(PLinkEventType::START, node, readyTime, pendingTransfer, affectedLinks, bottleneck);
+					var eventBegNode = make_shared<PLinkTransferEvent>(PLinkEventType::START, 
+						node, 
+						readyTime, 
+						pendingTransfer, 
+						affectedLinks, 
+						bottleneck,
+						from,
+						root->pContext->To.at(i));
 					timelineEvents[eventBegNode->EID] = eventBegNode;
 					timeline.insert(PLinkTimeLineElement(readyTime, eventBegNode->EID));
 					//dont queue events to affected links yet.
@@ -115,7 +156,13 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 				//finish instantly
 				//no affected link, just need an eventEndNode.
 				//this allows timeline to progress directly to the current dependants.
-				var eventEndNode = make_shared<PLinkTransferEvent>(PLinkEventType::END, node, readyTime, 0, NULL);
+				var eventEndNode = make_shared<PLinkTransferEvent>(PLinkEventType::END, 
+					node, 
+					readyTime, 
+					0, 
+					NULL,
+					INVALID_DEV_ID,
+					INVALID_DEV_ID);
 				timelineEvents[eventEndNode->EID] = eventEndNode;
 				timeline.insert(PLinkTimeLineElement(readyTime, eventEndNode->EID));
 			}
@@ -153,8 +200,9 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 					//all tasks that are running on this link will be:
 					//1) updated on their progress
 					//2) recalculate their bottleneck speed (current transfer speed).
-					for (var task : curr->AssignedLinks->at(i)->PendingEvents)
+					for (var taskID : curr->AssignedLinks->at(i)->PendingEvents)
 					{
+						var& task = timelineEvents.at(taskID);
 						if (flags.find(task->EID) != flags.end() || task->EventType == PLinkEventType::START)
 						{
 							//a start task is unaffected by link condition.
@@ -173,7 +221,7 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 						}
 
 					}
-					curr->AssignedLinks->at(i)->PendingEvents.push_back(curr);
+					curr->AssignedLinks->at(i)->PendingEvents.insert(curr->EID);
 				}
 				//remember, whenever a link share is updated, update the progress of each affected event
 				//produce an underestimate finish time.
@@ -189,7 +237,9 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 					estimatedEnd, 
 					curr->PendingTransfer, 
 					curr->AssignedLinks,
-					eBW);
+					eBW,
+					curr->From,
+					curr->To);
 				timelineEvents[endNode->EID] = endNode;
 				timeline.insert(PLinkTimeLineElement(estimatedEnd, endNode->EID));
 			}
@@ -235,24 +285,71 @@ double PLinkSim::SimulateTime(unordered_map<PLinkKey, size_t>& keySizes,
 					for (var link = 0; link < curr->AssignedLinks->size(); link++)
 					{
 						//what are the affected tasks?
-						for (var task : curr->AssignedLinks->at(link)->PendingEvents)
+						for (var taskIDs : curr->AssignedLinks->at(link)->PendingEvents)
 						{
 							//progress these tasks.
+							var& task = timelineEvents.at(taskIDs);
 							if (flags.find(task->EID) != flags.end() || task->EventType == PLinkEventType::START)
 							{
 								//nothing affects start events, 
 								//compute task progress only once.
+								continue;
 							}
 							flags.insert(task->EID);
 							//make a progress.
 							task->UpdateProgress(currTime);
 							//the link's bandwidth is going up.
 							//unfortunately, the link speed bottleneck can be multiple segments. we must re-probe.
-							var from = task->RelevantNode->pContext->From.at(0);
-							var to = task->RelevantNode
+							//remove this task from link.
+						}
+						curr->AssignedLinks->at(link)->PendingEvents.erase(curr->EID);
+					}
+					//next, compute each affected task's effective speed, and requeue them.
+					flags.clear();
+					for (var link = 0; link < curr->AssignedLinks->size(); link++)
+					{
+						//what are the affected tasks?
+						for (var taskIDs : curr->AssignedLinks->at(link)->PendingEvents)
+						{
+							//progress these tasks.
+							var& task = timelineEvents.at(taskIDs);
+							if (flags.find(task->EID) != flags.end() || task->EventType == PLinkEventType::START)
+							{
+								//nothing affects start events, 
+								//compute task progress only once.
+								continue;
+							}
+							flags.insert(task->EID);
+							var eBW = GetLinkBottleneck(task->From, task->To, env.RouteMap);
+							task->TransferBandwidth = eBW;
+							AdjustETA(task, timeline, currTime);
+						}
+						curr->AssignedLinks->at(link)->PendingEvents.erase(curr->EID);
+					}
+					//now test to see if this operator is finished
+					opCounter[curr->RelevantNode->ID]++;
+					if (opCounter[curr->RelevantNode->ID] == curr->RelevantNode->pContext->To.size())
+					{
+						//i have finsihed this broadcast op.
+						//if i am a sender, my receivers will all finish instantly (maybe 
+						//you want to add a certain delay).
+						
+						//otherwise, they may be other type of ops.
+						for (var child : curr->RelevantNode->Downstream)
+						{
+							child->UnresolvedDependencies--;
+							if (child->UnresolvedDependencies == 0)
+							{
+								//add an instant finish node.
+								//this is because 
+							}
 						}
 					}
 				}
+			}
+			else
+			{
+				//other operator. finish instantly.
 			}
 		}
 		lastTime = currTime;

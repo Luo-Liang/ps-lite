@@ -12,3 +12,7 @@ tests/test_*
 *.d
 
 recommonmark/
+/src/windows/PSLiteWin
+/vsphub/vsphub/bin/ARM/Debug
+/vsphub/vsphub/obj/ARM/Debug
+/gloo

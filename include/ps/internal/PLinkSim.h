@@ -4,6 +4,8 @@
 #include <ps/PLink.h>
 using namespace std;
 typedef uint DevId;
+#define INVALID_DEV_ID UINT_MAX
+#define LINK_TRANSFER_DELAY 0.01
 typedef uint EventId;
 typedef tuple<double, EventId> PLinkTimeLineElement;
 class Link;
@@ -28,7 +30,16 @@ struct PLinkTransferEvent
 	double LastTouch;
 	shared_ptr<vector<shared_ptr<Link>>> AssignedLinks;
 	EventId EID;
-	PLinkTransferEvent(PLinkEventType type, shared_ptr<ScheduleNode> node, double timeStamp, double pendingTransfer, shared_ptr < vector<shared_ptr<Link>>> link, double bw)
+	DevId From;
+	DevId To;
+	PLinkTransferEvent(PLinkEventType type, 
+		shared_ptr<ScheduleNode> node, 
+		double timeStamp, 
+		double pendingTransfer, 
+		shared_ptr < vector<shared_ptr<Link>>> link, 
+		double bw,
+		DevId from,
+		DevId to)
 	{
 		RelevantNode = node;
 		EventType = type;
@@ -41,6 +52,8 @@ struct PLinkTransferEvent
 		//}
 		EID = Ticketer++;
 		TransferBandwidth = bw;
+		From = from;
+		To = to;
 	}
 	void UpdateProgress(double now)
 	{
@@ -57,7 +70,7 @@ public:
 	shared_ptr<Device> EP1;
 	shared_ptr<Device> EP2;
 	//effective bandwidth is Bandwidth, averaged by number of pending events.
-	vector<shared_ptr<PLinkTransferEvent>> PendingEvents;
+	unordered_set<EventId> PendingEvents;
 };
 
 class Environment

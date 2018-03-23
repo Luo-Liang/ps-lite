@@ -28,6 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\include\ps\internal\ext.h" />
+    <ClInclude Include="..\..\include\ps\internal\PLinkSim.h" />
     <ClInclude Include="..\..\include\ps\Operator.h" />
     <ClInclude Include="..\..\include\ps\OperatorContext.h" />
     <ClInclude Include="..\..\include\ps\phub.h" />
@@ -44,6 +45,7 @@
   <ItemGroup>
     <ClCompile Include="..\..\src\PHub.cc" />
     <ClCompile Include="..\..\src\PHubBroadcast.cpp" />
+    <ClCompile Include="..\..\src\PLinkSim.cpp" />
     <ClCompile Include="..\..\src\postoffice.cc" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
