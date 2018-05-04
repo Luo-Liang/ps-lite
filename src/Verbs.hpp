@@ -1733,7 +1733,7 @@ class Verbs
 			}
 		}
 	}
-	inline void post_receive_raw(ibv_qp *qp, ibv_recv_wr wr *, ibv_recv_wr **badwr)
+	inline void post_receive_raw(ibv_qp *qp, ibv_recv_wr* wr, ibv_recv_wr **badwr)
 	{
 		ibv_recv_wr *bad_wr = nullptr;
 		int retval = ibv_post_recv(qp, wr, &bad_wr);
@@ -1741,7 +1741,8 @@ class Verbs
 		{
 			//        char buf[500];
 			//print_stacktrace();
-			printf("[%d]Error posting receive WR to endpoint %d. errno = %d. More informatin follows. Stack = %s\n", myId, QPIdx, retval, GetStacktraceString().c_str());
+			CHECK(false) << myId << " " << qp->qp_num;
+			//printf("[%d]Error posting receive WR to endpoint %d. errno = %d. More informatin follows. Stack = %s\n", myId, QPIdx, retval, GetStacktraceString().c_str());
 			perror("Error posting receive");
 			exit(1);
 		}
@@ -1753,7 +1754,7 @@ class Verbs
 	}
 	inline void post_receive(int QPIdx, ibv_recv_wr *wr)
 	{
-		post_receive_raw(endpoints[QPIdx].queue_pair, wr);
+		post_receive_raw(endpoints[QPIdx].queue_pair, &wr);
 		//printf("[%d][success] attempting to post receive wr to endpoint %d\n", myId, QPIdx);
 	}
 };

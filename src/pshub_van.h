@@ -518,28 +518,27 @@ class PSHUBVan : public InfiniBandVan
         //create a local copy to avoid verbs floating around.
         std::vector<int> pollVector = verbs->core2CQIdxs.at(tid);
 
-        auto selfLoopDevId = verbs->CQ2DeviceIdx.at(verbs->core2CQIdxs.at(0));
+        auto selfLoopDevId = verbs->CQ2DeviceIdx.at(verbs->core2CQIdxs.at(tid).at(0));
         //now, create a queue pair from this dev to this dev.
         //then, create some queue_pair
         auto selfLoopSCQ = ibv_create_cq(verbs->contexts.at(selfLoopDevId),
-                                         verbs::send_completion_queue_depth,
+                                         Verbs::send_completion_queue_depth,
                                          NULL, // no user context
                                          NULL, // no completion channel
                                          0);   // no completion channel vector
         auto selfLoopRCQ = ibv_create_cq(verbs->contexts.at(selfLoopDevId),
-                                         verbs::recv_completion_queue_depth,
+                                         Verbs::recv_completion_queue_depth,
                                          NULL, // no user context
                                          NULL, // no completion channel
                                          0);
 
         ibv_qp_init_attr init_attributes;
         std::memset(&init_attributes, 0, sizeof(ibv_qp_init_attr));
-        int cqIndex = endpoints.at(i).CQIdx;
         // use shared completion queue
-        init_attributes.send_cq = sendCompletionQueues.at(cqIndex);
-        init_attributes.recv_cq = receiveCompletionQueues.at(cqIndex);
+        init_attributes.send_cq = selfLoopSCQ;
+        init_attributes.recv_cq = selfLoopRCQ;
         //make sure we're using the same device.
-        CHECK(endpoints.at(i).DeviceIdx == CQ2DeviceIdx.at(cqIndex));
+        //CHECK(endpoints.at(i).DeviceIdx == CQ2DeviceIdx.at(cqIndex));
         // use "reliable connected" model in order to support RDMA atomics
         init_attributes.qp_type = IBV_QPT_RC;
 
@@ -547,15 +546,17 @@ class PSHUBVan : public InfiniBandVan
         init_attributes.sq_sig_all = 0;
 
         // set queue depths and WR parameters accoring to constants declared earlier
-        init_attributes.cap.max_send_wr = send_queue_depth;
-        init_attributes.cap.max_recv_wr = receive_queue_depth;
-        init_attributes.cap.max_send_sge = scatter_gather_element_count;
-        init_attributes.cap.max_recv_sge = scatter_gather_element_count;
-        init_attributes.cap.max_inline_data = max_inline_data;
+        init_attributes.cap.max_send_wr = Verbs::send_queue_depth;
+        init_attributes.cap.max_recv_wr = Verbs::receive_queue_depth;
+        init_attributes.cap.max_send_sge = Verbs::scatter_gather_element_count;
+        init_attributes.cap.max_recv_sge = Verbs::scatter_gather_element_count;
+        init_attributes.cap.max_inline_data = Verbs::max_inline_data;
         // create queue pair
         //printf("[%d] devid = %d, cq = %d, ep = %d, sendCQ = %p, context = %p\n", MyID, devId, cqIndex, i, sendCompletionQueues.at(cqIndex), protection_domains.at(devId)->context);
         auto selfLoopQP = ibv_create_qp(verbs->protection_domains.at(selfLoopDevId), &init_attributes);
         //connect qp toself.
+        ibv_qp_attr attributes;
+
         attributes.qp_state = IBV_QPS_INIT;
         attributes.port_num = verbs->ports.at(selfLoopDevId);
         attributes.pkey_index = 0;
@@ -580,13 +581,13 @@ class PSHUBVan : public InfiniBandVan
         attributes.path_mtu = verbs->ports_attribute.at(selfLoopDevId).active_mtu;
         attributes.dest_qp_num = selfLoopQP->qp_num;
         attributes.rq_psn = 0;
-        attributes.max_dest_rd_atomic = max_dest_rd_atomic;
-        attributes.min_rnr_timer = min_rnr_timer;
+        attributes.max_dest_rd_atomic = Verbs::max_dest_rd_atomic;
+        attributes.min_rnr_timer = Verbs::min_rnr_timer;
         attributes.ah_attr.is_global = 0;
         attributes.ah_attr.dlid = verbs->ports_attribute.at(selfLoopDevId).lid;
         attributes.ah_attr.sl = 0;
         attributes.ah_attr.src_path_bits = 0;
-        attributes.ah_attr.port_num = verbs->ports.at(devId);
+        attributes.ah_attr.port_num = verbs->ports.at(selfLoopDevId);
         retval = ibv_modify_qp(selfLoopQP, &attributes,
                                IBV_QP_STATE |
                                    IBV_QP_AV |
@@ -604,11 +605,11 @@ class PSHUBVan : public InfiniBandVan
         // move to RTS
         std::memset(&attributes, 0, sizeof(attributes));
         attributes.qp_state = IBV_QPS_RTS;
-        attributes.timeout = timeout;
-        attributes.retry_cnt = retry_count;
-        attributes.rnr_retry = rnr_retry;
+        attributes.timeout = Verbs::timeout;
+        attributes.retry_cnt = Verbs::retry_count;
+        attributes.rnr_retry = Verbs::rnr_retry;
         attributes.sq_psn = 0;
-        attributes.max_rd_atomic = max_rd_atomic;
+        attributes.max_rd_atomic = Verbs::max_rd_atomic;
         retval = ibv_modify_qp(selfLoopQP, &attributes,
                                IBV_QP_STATE |
                                    IBV_QP_TIMEOUT |
@@ -621,13 +622,14 @@ class PSHUBVan : public InfiniBandVan
             perror("Error setting queue pair to RTS");
             exit(1);
         }
-        std::vector<ibv_send_wr> selfLoopSendWR(keys.size());
-        std::vector<ibv_recv_wr> selfLoopRecvWR(keys.size());
-        std::vector<ibv_sge> selfLoopSGE(keys.size());
+        auto kCount = keySize.size();
+        std::vector<ibv_send_wr> selfLoopSendWR(kCount);
+        std::vector<ibv_recv_wr> selfLoopRecvWR(kCount);
+        std::vector<ibv_sge> selfLoopSGE(kCount);
         auto selfLoopSocketId = verbs->Device2SocketIdx.at(selfLoopDevId);
         size_t selfLoopLen;
-        auto selfLoopAddr = PHubAllocator::INSTANCE.GetStartAddress(selfLoopSocketId, &selfLoopLen);
-        for (int i = 0; i < keys.size(); i++)
+        auto selfLoopAddr = PHubAllocator::Get()->GetStartAddress(selfLoopSocketId, selfLoopLen);
+        for (int i = 0; i < kCount; i++)
         {
             selfLoopSendWR.at(i).num_sge = 1;
             selfLoopSendWR.at(i).sg_list = &selfLoopSGE[i];
@@ -653,7 +655,7 @@ class PSHUBVan : public InfiniBandVan
             size_t cqIdx = pollVector.at(memoizedPoll++ % pollSize);
             if (0 == verbs->poll(1, cqIdx, Verbs::CompletionQueueType::Receive, &wc))
             {
-                if (memoizedPoll % pollSize.size() != 0 || 0 == ibv_poll_cq(selfLoopRCQ, 1, &wc))
+                if (memoizedPoll % pollSize != 0 || 0 == ibv_poll_cq(selfLoopRCQ, 1, &wc))
                 {
                     continue;
                 }
@@ -664,20 +666,41 @@ class PSHUBVan : public InfiniBandVan
             //pull key j.
             //printf("[%d]Polling Completion Queue id = %d\n",msg->meta.recver,j);
             auto sender = (wc.imm_data >> PHUB_MAX_KEY_BITS) & PHUB_IMM_SENDER_MASK;
-            if(sender == my_node().ID)
+
+            auto j = wc.imm_data & PHUB_IMM_KEY_MASK;
+            if (sender == my_node().id)
             {
                 //do a vector vector add.
                 //a fake one.
-                if(SuppressAggregator == false)
+                //no direct connect.
+                int sid = Helper_Server_GetEndpointFromKey(j, 0).SocketIdx;
+                if (SuppressAggregator == false)
                 {
-                    ADD->VectorVectorAdd((float*)selfLoopAddr,selfLoopLen ,(float*)selfLoopAddr);
+                    ADD->VectorVectorAdd((float *)selfLoopAddr, selfLoopLen, (float *)selfLoopAddr);
                 }
-                goto BCAST;   
+
+                if (OPT != NULL && SuppressOptimizer == false)
+                {
+                    OPT->Update(j,
+                                (float *)PerSocketMergeBuffers[sid][j].GetCurrentReadBuffer(),
+                                (float *)PerSocketMergeBuffers[sid][j].GetCurrentWriteBuffer(),
+                                PerSocketMergeBuffers[sid][j].ActualElementCountPaddedForSSE);
+                }
+                //we have flipped the buffer. We're clear to send out fast acks.
+                //we dont need to clear up timestamps before pushing, because this thread is in control.
+
+                for (auto it = 0; it < workers.size(); it++)
+                {
+                    auto socketId = verbs->Helper_Server_GetEndpointFromKey(j, it).SocketIdx;
+                    //elided pulls
+                    PerSocketMergeBuffers[socketId][j].PostSendBufferBundledPushPullAck(it);
+                }
+
+                continue;
             }
             auto mit = node2MachineIdx.at(sender);
             CHECK(mit != -1) << " no route to " << sender;
             auto i = mit;
-            auto j = wc.imm_data & PHUB_IMM_KEY_MASK;
             //printf("[%d][PRE]PSHUB received key=%d from=%d len=%d more=%d, updatesreceived = %d, workersize = %d\n", dbgMyId, j, sender, wc.byte_len, UpdatesReceivedBuffer[j].core.load() - workers.size(), UpdatesReceivedBuffer[j].core.load(), workers.size());
 
             //printf("[%d][%d]Posting RecvBuffer[%d][%d]. Msg from %d. Size=%d\n",dbgMyId, my_node().role,i,j,wc.imm_data, wc.byte_len);
@@ -723,14 +746,14 @@ class PSHUBVan : public InfiniBandVan
                 //So that no signal is lost.
                 UpdatesReceivedBuffer[j]->store(0, std::memory_order_relaxed); //bye bye. safe because im still listening to the key
                 //send myself a message.
-                ibv_send_wr garbage;
+                ibv_send_wr *garbage = NULL;
                 if (--selfLoopPollCntr == 0)
                 {
                     selfLoopPollCntr = Verbs::send_queue_depth;
                     selfLoopSendWR.at(j).send_flags = IBV_SEND_SIGNALED;
                     ibv_post_send(selfLoopQP, &selfLoopSendWR.at(i), &garbage);
                     ibv_wc selfLoopWC;
-                    while (0 == poll(1, cqIndex, Verbs::Send, &selfLoopWC))
+                    while (0 == ibv_poll_cq(selfLoopSCQ, 1, &selfLoopWC))
                         ;
                 }
                 else
@@ -740,85 +763,6 @@ class PSHUBVan : public InfiniBandVan
                 }
                 continue;
                 //Do optimization here.
-                if (OPT != NULL && SuppressOptimizer == false)
-                {
-                    OPT->Update(j,
-                                (float *)PerSocketMergeBuffers[sid][j].GetCurrentReadBuffer(),
-                                (float *)PerSocketMergeBuffers[sid][j].GetCurrentWriteBuffer(),
-                                PerSocketMergeBuffers[sid][j].ActualElementCountPaddedForSSE);
-                }
-                else
-                {
-                    //This just flips the merge read/write buffer.
-                    //do not care what this means.
-                    if (IsAsync == false)
-                    {
-                        for (size_t socket = 0; socket < verbs->SocketCount; socket++)
-                        {
-                            PerSocketMergeBuffers[socket][j].AggregationAndOptimizationReady();
-                        }
-                    }
-                    else
-                    {
-                        PerSocketMergeBuffers[sid][j].AggregationAndOptimizationReady();
-                    }
-                }
-                //we have flipped the buffer. We're clear to send out fast acks.
-                //we dont need to clear up timestamps before pushing, because this thread is in control.
-                if (IsAsync == false)
-                {
-                    //copy back to each socket.
-                    if (verbs->DirectConnect == true)
-                    {
-                        for (size_t socket = 0; socket < verbs->SocketCount; socket++)
-                        {
-                            if (socket != sid)
-                            {
-                                //printf("copying final buffer from %d to %d\n", sid, socket);
-                                memcpy((float *)PerSocketMergeBuffers[socket][j].GetCurrentReadBuffer(),
-                                       (float *)PerSocketMergeBuffers[sid][j].GetCurrentReadBuffer(),
-                                       PerSocketMergeBuffers[sid][j].ActualElementCountPaddedForSSE);
-                            }
-                        }
-                    }
-                    for (auto it = 0; it < workers.size(); it++)
-                    {
-                        //auto it = node2MachineIdx[id];
-                        //CHECK(it != -1) << " No route to " << id << " from " << my_node_.id;
-                        //MetaSlim* meta = psSendBuffer[it][j].pMetaSlimBuffer;
-                        //printf("[PSHuB] sending out key = %d to %d, tid = %d\n", j, it*2+9, tid);
-                        //meta->push = true;
-                        //meta->request = false;
-                        //meta->sender = my_node_.id;
-                        //meta->recver = id;
-                        //meta->simple_app = false;
-                        ////PHuB/mxnet is the only customer.
-                        ////the following assignments are not very useful.
-                        //meta->customer_id = 0;
-                        //meta->head = 0;
-                        //find the right socketId.
-                        auto socketId = verbs->Helper_Server_GetEndpointFromKey(j, it).SocketIdx;
-                        //elided pulls
-                        PerSocketMergeBuffers[socketId][j].PostSendBufferBundledPushPullAck(it);
-                        //psSendBuffer[it][j]
-                        /* if(it == 0 && j == 0) */
-                        /*   { */
-                        //printf("[AFTER]merged= %s\n", SummarizeContinousBuffer((float*)PerSocketMergeBuffers[sid][j].GetCurrentWriteBuffer(), keySize[0]/sizeof(float)).c_str()); */
-                        /*     printf("[AFTER]model= %s\n", SummarizeContinousBuffer((float*)PerSocketMergeBuffers[sid][j].GetCurrentReadBuffer(), keySize[0]/sizeof(float)).c_str()); */
-                        /*   } */
-                    }
-                }
-                else
-                {
-                    //MetaSlim* meta = psSendBuffer[i][j].pMetaSlimBuffer;
-                    //meta->push = true;
-                    //meta->request = false;
-                    //meta->recver = meta->sender;
-                    //meta->sender = my_node_.id;
-                    auto socketId = verbs->Helper_Server_GetEndpointFromKey(j, i).SocketIdx;
-                    //return just one, not all.
-                    PerSocketMergeBuffers[socketId][j].PostSendBufferBundledPushPullAck(i);
-                }
             }
             //printf("[%d][post]PSHUB received key=%d from=%d len=%d more=%d, updatesreceived = %d, workersize = %d\n", dbgMyId, j, sender, wc.byte_len, UpdatesReceivedBuffer[j].core.load() - workers.size(), UpdatesReceivedBuffer[j].core.load(), workers.size());
         }
