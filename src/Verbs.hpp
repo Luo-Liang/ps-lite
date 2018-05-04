@@ -1754,7 +1754,8 @@ class Verbs
 	}
 	inline void post_receive(int QPIdx, ibv_recv_wr *wr)
 	{
-		post_receive_raw(endpoints[QPIdx].queue_pair, &wr);
+		ibv_recv_wr* badwr;
+		post_receive_raw(endpoints[QPIdx].queue_pair, wr, &badwr);
 		//printf("[%d][success] attempting to post receive wr to endpoint %d\n", myId, QPIdx);
 	}
 };

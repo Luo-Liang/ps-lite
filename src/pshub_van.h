@@ -639,13 +639,14 @@ class PSHUBVan : public InfiniBandVan
             selfLoopSendWR.at(i).wr.rdma.rkey = verbs->DeviceMemoryRegions.at(selfLoopDevId)->rkey;
 
             //now deal with SGEs.
-            selfLoopSGE.at(i).addr = selfLoopAddr;
+            selfLoopSGE.at(i).addr = (uint64_t)selfLoopAddr;
             selfLoopSGE.at(i).length = this->keySize.at(i);
             selfLoopSGE.at(i).lkey = verbs->DeviceMemoryRegions.at(selfLoopDevId)->lkey;
 
             //receive requests.
             selfLoopRecvWR.at(i).wr_id = i;
-            verbs->post_receive_raw(selfLoopQP, &selfLoopRecvWR.at(i));
+            ibv_recv_wr* garbageWR;
+            verbs->post_receive_raw(selfLoopQP, &selfLoopRecvWR.at(i), &garbageWR);
         }
         int selfLoopPollCntr = Verbs::send_queue_depth;
         //pollVector.push_back();
@@ -673,7 +674,7 @@ class PSHUBVan : public InfiniBandVan
                 //do a vector vector add.
                 //a fake one.
                 //no direct connect.
-                int sid = Helper_Server_GetEndpointFromKey(j, 0).SocketIdx;
+                int sid = verbs->Helper_Server_GetEndpointFromKey(j, 0).SocketIdx;
                 if (SuppressAggregator == false)
                 {
                     ADD->VectorVectorAdd((float *)selfLoopAddr, selfLoopLen, (float *)selfLoopAddr);
