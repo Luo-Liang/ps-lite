@@ -655,14 +655,16 @@ class PSHUBVan : public InfiniBandVan
         {
             ibv_wc wc;
             size_t cqIdx = pollVector.at(memoizedPoll++ % pollSize);
+            bool resurrectedDueToSelfLoopPoll = false;
             if (0 == verbs->poll(1, cqIdx, Verbs::CompletionQueueType::Receive, &wc))
             {
+                resurrectedDueToSelfLoopPoll = true;
                 if (memoizedPoll % pollSize != 0 || 0 == ibv_poll_cq(selfLoopRCQ, 1, &wc))
                 {
                     continue;
                 }
             }
-            CHECK(wc.status == IBV_WC_SUCCESS);
+            CHECK(wc.status == IBV_WC_SUCCESS) << "Caught incorrect status " << ibv_wc_status_str(wc.status) << " additional information: coming from selfloop=" << resurrectedDueToSelfLoopPoll;
             //sleep(0);
             //poll the infiniband connection and see whats going on.
             //pull key j.
@@ -752,7 +754,7 @@ class PSHUBVan : public InfiniBandVan
                 UpdatesReceivedBuffer[j]->store(0, std::memory_order_relaxed); //bye bye. safe because im still listening to the key
                 //send myself a message.
                 ibv_send_wr *garbage = NULL;
-                if (--selfLoopPollCntr == 0)
+                if (--selfLoopPollCntr == 0 || true)
                 {
                     selfLoopPollCntr = Verbs::send_queue_depth;
                     selfLoopSendWR.at(j).send_flags = IBV_SEND_SIGNALED;
@@ -760,11 +762,20 @@ class PSHUBVan : public InfiniBandVan
                     ibv_wc selfLoopWC;
                     while (0 == ibv_poll_cq(selfLoopSCQ, 1, &selfLoopWC))
                         ;
+                    raise(SIGTRAP);
+
+                    CHECK(selfLoopWC.status == IBV_WC_SUCCESS) << ibv_wc_status_str(selfLoopWC.status)
+                                                               << " addr=" << selfLoopSendWR.at(j).sg_list[0].addr
+                                                               << " len=" << selfLoopSendWR.at(j).sg_list[0].length
+                                                               << " lkey=" << selfLoopSendWR.at(j).sg_list[0].lkey
+                                                               << " tid=" << tid
+                                                               << " key=" << j;
                 }
                 else
                 {
                     selfLoopSendWR.at(j).send_flags = 0;
                     CHECK(ibv_post_send(selfLoopQP, &selfLoopSendWR.at(j), &garbage) == 0);
+                    printf("queueing myself. tid = %d, key = %d \n", tid, j);
                 }
                 continue;
                 //Do optimization here.

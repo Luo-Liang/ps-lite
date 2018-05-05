@@ -117,4 +117,3 @@ static void* AlignedAllocateUniversal(size_t bytes, int sock = -1, size_t alignm
     }
     return ret;
 }
-
