@@ -679,7 +679,7 @@ class PSHUBVan : public InfiniBandVan
                 if (SuppressAggregator == false)
                 {
                     ADD->VectorVectorAdd((float *)PerSocketMergeBuffers[sid][j].GetCurrentWriteBuffer(),
-                                         selfLoopSGE.at(j).length,
+                                         PerSocketMergeBuffers[sid][j].ActualElementCountPaddedForSSE,
                                          (float *)PerSocketMergeBuffers[sid][j].GetCurrentReadBuffer());
                 }
 
@@ -700,6 +700,7 @@ class PSHUBVan : public InfiniBandVan
                     //elided pulls
                     PerSocketMergeBuffers[socketId][j].PostSendBufferBundledPushPullAck(it);
                 }
+                verbs->post_receive_raw(selfLoopQP, &selfLoopRecvWR.at(j));
                 continue;
             }
             auto mit = node2MachineIdx.at(sender);
@@ -755,7 +756,7 @@ class PSHUBVan : public InfiniBandVan
                 {
                     selfLoopPollCntr = Verbs::send_queue_depth;
                     selfLoopSendWR.at(j).send_flags = IBV_SEND_SIGNALED;
-                    CHECK(ibv_post_send(selfLoopQP, &selfLoopSendWR.at(i), &garbage) == 0);
+                    CHECK(ibv_post_send(selfLoopQP, &selfLoopSendWR.at(j), &garbage) == 0);
                     ibv_wc selfLoopWC;
                     while (0 == ibv_poll_cq(selfLoopSCQ, 1, &selfLoopWC))
                         ;
@@ -763,7 +764,7 @@ class PSHUBVan : public InfiniBandVan
                 else
                 {
                     selfLoopSendWR.at(j).send_flags = 0;
-                    CHECK(ibv_post_send(selfLoopQP, &selfLoopSendWR.at(i), &garbage) == 0);
+                    CHECK(ibv_post_send(selfLoopQP, &selfLoopSendWR.at(j), &garbage) == 0);
                 }
                 continue;
                 //Do optimization here.
