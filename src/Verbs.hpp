@@ -1733,7 +1733,7 @@ class Verbs
 			}
 		}
 	}
-	inline void post_receive_raw(ibv_qp *qp, ibv_recv_wr* wr, ibv_recv_wr **badwr)
+	inline void post_receive_raw(ibv_qp *qp, ibv_recv_wr* wr)
 	{
 		ibv_recv_wr *bad_wr = nullptr;
 		int retval = ibv_post_recv(qp, wr, &bad_wr);
@@ -1754,8 +1754,7 @@ class Verbs
 	}
 	inline void post_receive(int QPIdx, ibv_recv_wr *wr)
 	{
-		ibv_recv_wr* badwr;
-		post_receive_raw(endpoints[QPIdx].queue_pair, wr, &badwr);
+		post_receive_raw(endpoints[QPIdx].queue_pair, wr);
 		//printf("[%d][success] attempting to post receive wr to endpoint %d\n", myId, QPIdx);
 	}
 };

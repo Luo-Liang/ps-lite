@@ -446,7 +446,6 @@ class PSHUBVan : public InfiniBandVan
 
     void PerCoreNUMAAwareInitialization(size_t tid)
     {
-
         //first, everyone need to setup their QP Counters.
         //figure out what QPs belong to me.
         std::vector<int> myQPs;
@@ -627,26 +626,28 @@ class PSHUBVan : public InfiniBandVan
         std::vector<ibv_recv_wr> selfLoopRecvWR(kCount);
         std::vector<ibv_sge> selfLoopSGE(kCount);
         auto selfLoopSocketId = verbs->Device2SocketIdx.at(selfLoopDevId);
-        size_t selfLoopLen;
-        auto selfLoopAddr = PHubAllocator::Get()->GetStartAddress(selfLoopSocketId, selfLoopLen);
+        //size_t selfLoopLen;
+        //auto selfLoopAddr = PHubAllocator::Get()->PHUBMergeKVBuffer(selfLoopSocketId, selfLoopLen);
         for (int i = 0; i < kCount; i++)
         {
+            size_t len;
+            auto rAddr = PHubAllocator::Get()->PHUBMergeKVBuffer(i, 0, selfLoopDevId, len);
+            //now deal with SGEs.
+            selfLoopSGE.at(i).addr = (uint64_t)rAddr;
+            selfLoopSGE.at(i).length = len;
+            selfLoopSGE.at(i).lkey = verbs->DeviceMemoryRegions.at(selfLoopDevId)->lkey;
+
             selfLoopSendWR.at(i).num_sge = 1;
             selfLoopSendWR.at(i).sg_list = &selfLoopSGE[i];
             selfLoopSendWR.at(i).opcode = IBV_WR_RDMA_WRITE_WITH_IMM;
             selfLoopSendWR.at(i).imm_data = (ps::Postoffice::Get()->van()->my_node().id << PHUB_MAX_KEY_BITS) | i;
-            selfLoopSendWR.at(i).wr.rdma.remote_addr = (uint64_t)selfLoopAddr;
-            selfLoopSendWR.at(i).wr.rdma.rkey = verbs->DeviceMemoryRegions.at(selfLoopDevId)->rkey;
 
-            //now deal with SGEs.
-            selfLoopSGE.at(i).addr = (uint64_t)selfLoopAddr;
-            selfLoopSGE.at(i).length = this->keySize.at(i);
-            selfLoopSGE.at(i).lkey = verbs->DeviceMemoryRegions.at(selfLoopDevId)->lkey;
+            selfLoopSendWR.at(i).wr.rdma.remote_addr = (uint64_t)rAddr;
+            selfLoopSendWR.at(i).wr.rdma.rkey = verbs->DeviceMemoryRegions.at(selfLoopDevId)->rkey;
 
             //receive requests.
             selfLoopRecvWR.at(i).wr_id = i;
-            ibv_recv_wr* garbageWR;
-            verbs->post_receive_raw(selfLoopQP, &selfLoopRecvWR.at(i), &garbageWR);
+            verbs->post_receive_raw(selfLoopQP, &selfLoopRecvWR.at(i));
         }
         int selfLoopPollCntr = Verbs::send_queue_depth;
         //pollVector.push_back();
@@ -661,7 +662,7 @@ class PSHUBVan : public InfiniBandVan
                     continue;
                 }
             }
-
+            CHECK(wc.status == IBV_WC_SUCCESS);
             //sleep(0);
             //poll the infiniband connection and see whats going on.
             //pull key j.
@@ -677,7 +678,9 @@ class PSHUBVan : public InfiniBandVan
                 int sid = verbs->Helper_Server_GetEndpointFromKey(j, 0).SocketIdx;
                 if (SuppressAggregator == false)
                 {
-                    ADD->VectorVectorAdd((float *)selfLoopAddr, selfLoopLen, (float *)selfLoopAddr);
+                    ADD->VectorVectorAdd((float *)PerSocketMergeBuffers[sid][j].GetCurrentWriteBuffer(),
+                                         selfLoopSGE.at(j).length,
+                                         (float *)PerSocketMergeBuffers[sid][j].GetCurrentReadBuffer());
                 }
 
                 if (OPT != NULL && SuppressOptimizer == false)
@@ -689,14 +692,14 @@ class PSHUBVan : public InfiniBandVan
                 }
                 //we have flipped the buffer. We're clear to send out fast acks.
                 //we dont need to clear up timestamps before pushing, because this thread is in control.
-
                 for (auto it = 0; it < workers.size(); it++)
                 {
+                    MetaSlim *meta = psSendBuffer[it][j].pMetaSlimBuffer;
+                    printf("[PSHuB] pushing out meta = %llx\n", meta);
                     auto socketId = verbs->Helper_Server_GetEndpointFromKey(j, it).SocketIdx;
                     //elided pulls
                     PerSocketMergeBuffers[socketId][j].PostSendBufferBundledPushPullAck(it);
                 }
-
                 continue;
             }
             auto mit = node2MachineIdx.at(sender);
@@ -752,7 +755,7 @@ class PSHUBVan : public InfiniBandVan
                 {
                     selfLoopPollCntr = Verbs::send_queue_depth;
                     selfLoopSendWR.at(j).send_flags = IBV_SEND_SIGNALED;
-                    ibv_post_send(selfLoopQP, &selfLoopSendWR.at(i), &garbage);
+                    CHECK(ibv_post_send(selfLoopQP, &selfLoopSendWR.at(i), &garbage) == 0);
                     ibv_wc selfLoopWC;
                     while (0 == ibv_poll_cq(selfLoopSCQ, 1, &selfLoopWC))
                         ;
@@ -760,7 +763,7 @@ class PSHUBVan : public InfiniBandVan
                 else
                 {
                     selfLoopSendWR.at(j).send_flags = 0;
-                    ibv_post_send(selfLoopQP, &selfLoopSendWR.at(i), &garbage);
+                    CHECK(ibv_post_send(selfLoopQP, &selfLoopSendWR.at(i), &garbage) == 0);
                 }
                 continue;
                 //Do optimization here.
