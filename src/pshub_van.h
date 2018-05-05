@@ -631,12 +631,13 @@ class PSHUBVan : public InfiniBandVan
         for (int i = 0; i < kCount; i++)
         {
             size_t len;
-            auto rAddr = PHubAllocator::Get()->PHUBMergeKVBuffer(i, 0, selfLoopDevId, len);
+            auto rAddr = PHubAllocator::Get()->PHUBMergeKVBuffer(i, 0, verbs->Device2SocketIdx.at(selfLoopDevId), len);
             //now deal with SGEs.
             selfLoopSGE.at(i).addr = (uint64_t)rAddr;
             selfLoopSGE.at(i).length = len;
             selfLoopSGE.at(i).lkey = verbs->DeviceMemoryRegions.at(selfLoopDevId)->lkey;
 
+            selfLoopSendWR.at(i).wr_id = i;
             selfLoopSendWR.at(i).num_sge = 1;
             selfLoopSendWR.at(i).sg_list = &selfLoopSGE[i];
             selfLoopSendWR.at(i).opcode = IBV_WR_RDMA_WRITE_WITH_IMM;
@@ -656,10 +657,17 @@ class PSHUBVan : public InfiniBandVan
             ibv_wc wc;
             size_t cqIdx = pollVector.at(memoizedPoll++ % pollSize);
             bool resurrectedDueToSelfLoopPoll = false;
-            if (0 == verbs->poll(1, cqIdx, Verbs::CompletionQueueType::Receive, &wc))
+            /*if (0 == verbs->poll(1, cqIdx, Verbs::CompletionQueueType::Receive, &wc))
             {
                 resurrectedDueToSelfLoopPoll = true;
-                if (memoizedPoll % pollSize != 0 || 0 == ibv_poll_cq(selfLoopRCQ, 1, &wc))
+                if (0 == ibv_poll_cq(selfLoopRCQ, 1, &wc))
+                {
+                    continue;
+                }
+            }*/
+            if (0 == ibv_poll_cq(selfLoopRCQ, 1, &wc))
+            {
+                if (0 == verbs->poll(1, cqIdx, Verbs::CompletionQueueType::Receive, &wc))
                 {
                     continue;
                 }
@@ -697,7 +705,7 @@ class PSHUBVan : public InfiniBandVan
                 for (auto it = 0; it < workers.size(); it++)
                 {
                     MetaSlim *meta = psSendBuffer[it][j].pMetaSlimBuffer;
-                    printf("[PSHuB] pushing out meta = %llx\n", meta);
+                    //printf("[PSHuB] pushing out meta = %llx\n", meta);
                     auto socketId = verbs->Helper_Server_GetEndpointFromKey(j, it).SocketIdx;
                     //elided pulls
                     PerSocketMergeBuffers[socketId][j].PostSendBufferBundledPushPullAck(it);
@@ -762,7 +770,7 @@ class PSHUBVan : public InfiniBandVan
                     ibv_wc selfLoopWC;
                     while (0 == ibv_poll_cq(selfLoopSCQ, 1, &selfLoopWC))
                         ;
-                    raise(SIGTRAP);
+                    //raise(SIGTRAP);
 
                     CHECK(selfLoopWC.status == IBV_WC_SUCCESS) << ibv_wc_status_str(selfLoopWC.status)
                                                                << " addr=" << selfLoopSendWR.at(j).sg_list[0].addr
