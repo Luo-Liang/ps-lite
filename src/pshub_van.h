@@ -43,9 +43,11 @@ class PSHUBVan : public InfiniBandVan
     bool SuppressOptimizer = false;
     Optimizer *OPT = NULL;
     Aggregator *ADD = NULL;
+    vector<int> selfLoopKeyCounter;
     //let infiniband van deal with all those start up thingy.
     //leave send as it is.
     //intercept push calls
+    int selfLoopExpectedCounter = 1;
     PSHUBVan(int maxDataServingThreads)
     {
         auto async = Environment::Get()->find("PHUB_ASYNC_MODE");
@@ -63,7 +65,11 @@ class PSHUBVan : public InfiniBandVan
         {
             SuppressAggregator = true;
         }
-
+        auto selfLoopExpectedCounterStr = Environment::Get()->find("PHUB_HIERARCHICAL_SIM_RACK");
+        if (selfLoopExpectedCounterStr != NULL)
+        {
+            selfLoopExpectedCounter = atoi(selfLoopExpectedCounterStr) - 1;
+        }
         //our job is to distribute these threads to different jobs.
         this->MaximumAllowedThreads = maxDataServingThreads;
         FeatureSet = Van::WorkerSidePushPullZeroCopy |
@@ -149,7 +155,7 @@ class PSHUBVan : public InfiniBandVan
         if (my_node().role != Node::SERVER)
             return;
         //CHECK(verbs->CoreCount > 0);
-
+        selfLoopKeyCounter.resize(keySize.size());
         auto prefetch_dist_str = Environment::Get()->find("PHUB_PREFETCH_DIST");
         size_t prefetch_distance = 0x240;
         if (prefetch_dist_str != NULL)
@@ -280,16 +286,6 @@ class PSHUBVan : public InfiniBandVan
                 maxKeySizeinB = keySize[i];
                 kid = i;
             }
-            /*auto j = i;
-                if(j == 0 && keySize[j] / sizeof(float) > 60000)
-                {
-                    printf("[INIT0] %s\n", SummarizeContinousBuffer((float*)MergeBuffers[0].GetCurrentReadBuffer(), 60000).c_str());
-                    printf("[INIT1] %s\n", SummarizeContinousBuffer((float*)MergeBuffers[0].GetCurrentReadBuffer() + 60000, keySize[0] / sizeof(float)-60000).c_str());
-                }
-                else if((j == 0 || j == 1) && keySize[0] / sizeof(float) == 60000)
-                {
-                    printf("[INIT%d] %s\n",j, SummarizeContinousBuffer((float*)MergeBuffers[j].GetCurrentReadBuffer(), keySize[j] / sizeof(float)).c_str());
-                    }*/
 
             totalSizeInMB += keySize[i];
         }
@@ -323,7 +319,7 @@ class PSHUBVan : public InfiniBandVan
             }
         }
         GTG = true;
-        PS_VLOG(0) << "[PSHUB" << my_node_.id << "] Maximum Key=" << kid << " Size=" << maxKeySizeinB / 1024.0 << " kB. There are " << keySize.size() << " keys. Total: " << totalSizeInMB / 1024.0 / 1024.0 << " MB. Running Mode: Async = " << IsAsync << " Suppress Optimizer = " << SuppressOptimizer << " Optimizer = " << optimizer << " Aggregator = " << aggregator << " Suppress Aggregator =" << SuppressAggregator << " " << ShowImbalance();
+        PS_VLOG(0) << "[PSHUB" << my_node_.id << "] Sim Racks = " << selfLoopExpectedCounter + 1 << " Maximum Key=" << kid << " Size=" << maxKeySizeinB / 1024.0 << " kB. There are " << keySize.size() << " keys. Total: " << totalSizeInMB / 1024.0 / 1024.0 << " MB. Running Mode: Async = " << IsAsync << " Suppress Optimizer = " << SuppressOptimizer << " Optimizer = " << optimizer << " Aggregator = " << aggregator << " Suppress Aggregator =" << SuppressAggregator << " " << ShowImbalance();
     }
     volatile bool stopRequested = false;
     std::string DebugString(std::vector<pair<int, int>> &data)
@@ -500,6 +496,30 @@ class PSHUBVan : public InfiniBandVan
         }
     }
     volatile bool GTG = false;
+    void selfLoopMessage(int &selfLoopPollCntr, ibv_send_wr *wr, ibv_qp *selfLoopQP, ibv_cq *selfLoopSCQ)
+    {
+        ibv_send_wr *garbage = NULL;
+        CHECK(selfLoopPollCntr > 0);
+        if (--selfLoopPollCntr == 0)
+        {
+            selfLoopPollCntr = Verbs::send_queue_depth;
+            wr->send_flags = IBV_SEND_SIGNALED;
+            CHECK(ibv_post_send(selfLoopQP, wr, &garbage) == 0);
+            ibv_wc selfLoopWC;
+            while (0 == ibv_poll_cq(selfLoopSCQ, 1, &selfLoopWC))
+                ;
+            //raise(SIGTRAP);
+
+            CHECK(selfLoopWC.status == IBV_WC_SUCCESS) << ibv_wc_status_str(selfLoopWC.status);
+            //workerQP2SrvQPI/<< " key=" << j;
+        }
+        else
+        {
+            wr->send_flags = 0;
+            CHECK(ibv_post_send(selfLoopQP, wr, &garbage) == 0);
+            //printf("queueing myself. tid = %d, key = %d \n", tid, j);
+        }
+    }
     void infiniBandCollect(size_t tid)
     {
         while (GTG == false)
@@ -692,23 +712,34 @@ class PSHUBVan : public InfiniBandVan
                                          PerSocketMergeBuffers[sid][j].ActualElementCountPaddedForSSE,
                                          (float *)PerSocketMergeBuffers[sid][j].GetCurrentReadBuffer());
                 }
-
-                if (OPT != NULL && SuppressOptimizer == false)
+                //add one.
+                selfLoopKeyCounter.at(j)++;
+                CHECK(selfLoopKeyCounter.at(j) <= selfLoopExpectedCounter);
+                if (selfLoopKeyCounter.at(j) == selfLoopExpectedCounter)
                 {
-                    OPT->Update(j,
-                                (float *)PerSocketMergeBuffers[sid][j].GetCurrentReadBuffer(),
-                                (float *)PerSocketMergeBuffers[sid][j].GetCurrentWriteBuffer(),
-                                PerSocketMergeBuffers[sid][j].ActualElementCountPaddedForSSE);
+                    if (OPT != NULL && SuppressOptimizer == false)
+                    {
+                        OPT->Update(j,
+                                    (float *)PerSocketMergeBuffers[sid][j].GetCurrentReadBuffer(),
+                                    (float *)PerSocketMergeBuffers[sid][j].GetCurrentWriteBuffer(),
+                                    PerSocketMergeBuffers[sid][j].ActualElementCountPaddedForSSE);
+                    }
+                    //we have flipped the buffer. We're clear to send out fast acks.
+                    //we dont need to clear up timestamps before pushing, because this thread is in control.
+                    for (auto it = 0; it < workers.size(); it++)
+                    {
+                        MetaSlim *meta = psSendBuffer[it][j].pMetaSlimBuffer;
+                        //printf("[PSHuB] pushing out meta = %llx\n", meta);
+                        auto socketId = verbs->Helper_Server_GetEndpointFromKey(j, it).SocketIdx;
+                        //elided pulls
+                        PerSocketMergeBuffers[socketId][j].PostSendBufferBundledPushPullAck(it);
+                    }
+                    selfLoopKeyCounter.at(j) = 0;
                 }
-                //we have flipped the buffer. We're clear to send out fast acks.
-                //we dont need to clear up timestamps before pushing, because this thread is in control.
-                for (auto it = 0; it < workers.size(); it++)
+                else
                 {
-                    MetaSlim *meta = psSendBuffer[it][j].pMetaSlimBuffer;
-                    //printf("[PSHuB] pushing out meta = %llx\n", meta);
-                    auto socketId = verbs->Helper_Server_GetEndpointFromKey(j, it).SocketIdx;
-                    //elided pulls
-                    PerSocketMergeBuffers[socketId][j].PostSendBufferBundledPushPullAck(it);
+                    //loop again.
+                    selfLoopMessage(selfLoopPollCntr, &selfLoopSendWR.at(j), selfLoopQP, selfLoopSCQ);
                 }
                 verbs->post_receive_raw(selfLoopQP, &selfLoopRecvWR.at(j));
                 continue;
@@ -722,15 +753,9 @@ class PSHUBVan : public InfiniBandVan
             ReceiveRequests[wc.wr_id]->PostReceiveRequest();
             //printf("[%d][%d]RECVDBG byte_len=%d\n", dbgMyId, my_node_.role,wc.byte_len);
             auto &buffer = psRecvBuffer[i][j];
-            MetaSlim *ms = buffer.pMetaSlimBuffer;
-
-            MEASURE_THIS_TIME_BEG_EX(PERFMON_WORKER_MSG_IN_FLIGHT_TIME_PULL, j, ms->PHubAdditionalPayload);
-            MEASURE_THIS_TIME_END(PERFMON_WORKER_MSG_IN_FLIGHT_TIME_PULL, j);
-
             auto sid = verbs->Helper_Server_GetEndpointFromKey(j, i).SocketIdx;
             if (SuppressAggregator == false)
             {
-                MEASURE_THIS_TIME_BEG(PERFMON_PHUB_KEY_MERGE, j);
                 //this is fine because in a socket only one processor can see this key.
                 //so even though all of them sees 0, they can copy no problem.
                 if (UpdatesReceivedBuffer.at(j)->load() == 0)
@@ -761,30 +786,7 @@ class PSHUBVan : public InfiniBandVan
                 //So that no signal is lost.
                 UpdatesReceivedBuffer[j]->store(0, std::memory_order_relaxed); //bye bye. safe because im still listening to the key
                 //send myself a message.
-                ibv_send_wr *garbage = NULL;
-                if (--selfLoopPollCntr == 0 || true)
-                {
-                    selfLoopPollCntr = Verbs::send_queue_depth;
-                    selfLoopSendWR.at(j).send_flags = IBV_SEND_SIGNALED;
-                    CHECK(ibv_post_send(selfLoopQP, &selfLoopSendWR.at(j), &garbage) == 0);
-                    ibv_wc selfLoopWC;
-                    while (0 == ibv_poll_cq(selfLoopSCQ, 1, &selfLoopWC))
-                        ;
-                    //raise(SIGTRAP);
-
-                    CHECK(selfLoopWC.status == IBV_WC_SUCCESS) << ibv_wc_status_str(selfLoopWC.status)
-                                                               << " addr=" << selfLoopSendWR.at(j).sg_list[0].addr
-                                                               << " len=" << selfLoopSendWR.at(j).sg_list[0].length
-                                                               << " lkey=" << selfLoopSendWR.at(j).sg_list[0].lkey
-                                                               << " tid=" << tid
-                                                               << " key=" << j;
-                }
-                else
-                {
-                    selfLoopSendWR.at(j).send_flags = 0;
-                    CHECK(ibv_post_send(selfLoopQP, &selfLoopSendWR.at(j), &garbage) == 0);
-                    printf("queueing myself. tid = %d, key = %d \n", tid, j);
-                }
+                selfLoopMessage(selfLoopPollCntr, &selfLoopSendWR.at(j), selfLoopQP, selfLoopSCQ);
                 continue;
                 //Do optimization here.
             }
