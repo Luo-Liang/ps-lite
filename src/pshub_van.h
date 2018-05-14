@@ -47,7 +47,7 @@ class PSHUBVan : public InfiniBandVan
     //let infiniband van deal with all those start up thingy.
     //leave send as it is.
     //intercept push calls
-    int selfLoopExpectedCounter = 1;
+    int selfLoopExpectedCounter = 2;
     PSHUBVan(int maxDataServingThreads)
     {
         auto async = Environment::Get()->find("PHUB_ASYNC_MODE");
@@ -68,7 +68,7 @@ class PSHUBVan : public InfiniBandVan
         auto selfLoopExpectedCounterStr = Environment::Get()->find("PHUB_HIERARCHICAL_SIM_RACK");
         if (selfLoopExpectedCounterStr != NULL)
         {
-            selfLoopExpectedCounter = atoi(selfLoopExpectedCounterStr) - 1;
+            selfLoopExpectedCounter = atoi(selfLoopExpectedCounterStr);
         }
         //our job is to distribute these threads to different jobs.
         this->MaximumAllowedThreads = maxDataServingThreads;
@@ -319,7 +319,7 @@ class PSHUBVan : public InfiniBandVan
             }
         }
         GTG = true;
-        PS_VLOG(0) << "[PSHUB" << my_node_.id << "] Sim Racks = " << selfLoopExpectedCounter + 1 << " Maximum Key=" << kid << " Size=" << maxKeySizeinB / 1024.0 << " kB. There are " << keySize.size() << " keys. Total: " << totalSizeInMB / 1024.0 / 1024.0 << " MB. Running Mode: Async = " << IsAsync << " Suppress Optimizer = " << SuppressOptimizer << " Optimizer = " << optimizer << " Aggregator = " << aggregator << " Suppress Aggregator =" << SuppressAggregator << " " << ShowImbalance();
+        PS_VLOG(0) << "[PSHUB" << my_node_.id << "] Sim Racks = " << selfLoopExpectedCounter  << " Maximum Key=" << kid << " Size=" << maxKeySizeinB / 1024.0 << " kB. There are " << keySize.size() << " keys. Total: " << totalSizeInMB / 1024.0 / 1024.0 << " MB. Running Mode: Async = " << IsAsync << " Suppress Optimizer = " << SuppressOptimizer << " Optimizer = " << optimizer << " Aggregator = " << aggregator << " Suppress Aggregator =" << SuppressAggregator << " " << ShowImbalance();
     }
     volatile bool stopRequested = false;
     std::string DebugString(std::vector<pair<int, int>> &data)
@@ -685,6 +685,7 @@ class PSHUBVan : public InfiniBandVan
                     continue;
                 }
             }*/
+
             if (0 == ibv_poll_cq(selfLoopRCQ, 1, &wc))
             {
                 if (0 == verbs->poll(1, cqIdx, Verbs::CompletionQueueType::Receive, &wc))
@@ -809,4 +810,4 @@ class PSHUBVan : public InfiniBandVan
         }
     }
 };
-}
+} // namespace ps
